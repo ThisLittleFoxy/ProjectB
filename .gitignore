@@ -1,0 +1,92 @@
+# Visual Studio 2022
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.sln
+*.uproject
+# Unreal Engine Build Files
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Starter Content (optional)
+Content/StarterContent/
+
+# Plugin Binaries
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Cache и временные файлы
+*.log
+*.tlog
+*.idb
+*.ipch
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+
+# Rider
+.idea/
+*.sln.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Backup файлы
+*.tmp
+*_BuiltData.uasset
+
+# Auto Claude data directory
+.auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/
