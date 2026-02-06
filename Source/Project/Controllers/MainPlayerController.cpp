@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "RailsPlayerController.h"
+#include "MainPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "Character/ControllableCharacterInterface.h"
 #include "Engine/LocalPlayer.h"
@@ -13,7 +13,7 @@
 #include "InputMappingContext.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
-ARailsPlayerController::ARailsPlayerController() {
+AMainPlayerController::AMainPlayerController() {
   // Enable widget interaction
   bShowMouseCursor = false;
   bEnableClickEvents = true;
@@ -22,11 +22,11 @@ ARailsPlayerController::ARailsPlayerController() {
   bEnableTouchOverEvents = false;
 }
 
-void ARailsPlayerController::BeginPlay() {
+void AMainPlayerController::BeginPlay() {
   Super::BeginPlay();
 
   UE_LOG(LogProject, Log,
-         TEXT("RailsPlayerController::BeginPlay - Controller: %s"), *GetName());
+         TEXT("MainPlayerController::BeginPlay - Controller: %s"), *GetName());
   UE_LOG(LogProject, Log, TEXT("IsLocalPlayerController: %s"),
          IsLocalPlayerController() ? TEXT("true") : TEXT("false"));
   UE_LOG(LogProject, Log, TEXT("ShouldUseTouchControls: %s"),
@@ -49,11 +49,11 @@ void ARailsPlayerController::BeginPlay() {
   }
 }
 
-void ARailsPlayerController::SetupInputComponent() {
+void AMainPlayerController::SetupInputComponent() {
   Super::SetupInputComponent();
 
   UE_LOG(LogProject, Log,
-         TEXT("RailsPlayerController::SetupInputComponent - Controller: %s"),
+         TEXT("MainPlayerController::SetupInputComponent - Controller: %s"),
          *GetName());
   UE_LOG(LogProject, Log, TEXT("IsLocalPlayerController: %s"),
          IsLocalPlayerController() ? TEXT("true") : TEXT("false"));
@@ -116,7 +116,7 @@ void ARailsPlayerController::SetupInputComponent() {
   }
 }
 
-void ARailsPlayerController::BindInputActions() {
+void AMainPlayerController::BindInputActions() {
   UEnhancedInputComponent *EnhancedInputComponent =
       Cast<UEnhancedInputComponent>(InputComponent);
   if (!EnhancedInputComponent) {
@@ -165,7 +165,7 @@ void ARailsPlayerController::BindInputActions() {
           ActionName.Contains(TEXT("IA_Move"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
                                            this,
-                                           &ARailsPlayerController::HandleMove);
+                                           &AMainPlayerController::HandleMove);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleMove"),
                *ActionName);
         BoundActions.Add(Action);
@@ -173,7 +173,7 @@ void ARailsPlayerController::BindInputActions() {
                  ActionName.Contains(TEXT("IA_Look"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
                                            this,
-                                           &ARailsPlayerController::HandleLook);
+                                           &AMainPlayerController::HandleLook);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleLook"),
                *ActionName);
         BoundActions.Add(Action);
@@ -181,10 +181,10 @@ void ARailsPlayerController::BindInputActions() {
                  ActionName.Contains(TEXT("IA_Jump"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
-            &ARailsPlayerController::HandleJumpStarted);
+            &AMainPlayerController::HandleJumpStarted);
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
-            &ARailsPlayerController::HandleJumpCompleted);
+            &AMainPlayerController::HandleJumpCompleted);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleJump"),
                *ActionName);
         BoundActions.Add(Action);
@@ -192,10 +192,10 @@ void ARailsPlayerController::BindInputActions() {
                  ActionName.Contains(TEXT("IA_Sprint"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
-            &ARailsPlayerController::HandleSprintStarted);
+            &AMainPlayerController::HandleSprintStarted);
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
-            &ARailsPlayerController::HandleSprintCompleted);
+            &AMainPlayerController::HandleSprintCompleted);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleSprint"),
                *ActionName);
         BoundActions.Add(Action);
@@ -203,7 +203,7 @@ void ARailsPlayerController::BindInputActions() {
                  ActionName.Contains(TEXT("IA_Interact"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
-            &ARailsPlayerController::HandleInteract);
+            &AMainPlayerController::HandleInteract);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleInteract"),
                *ActionName);
         BoundActions.Add(Action);
@@ -211,10 +211,10 @@ void ARailsPlayerController::BindInputActions() {
                  ActionName.Contains(TEXT("IA_Fire"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
-            &ARailsPlayerController::HandleFireStarted);
+            &AMainPlayerController::HandleFireStarted);
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
-            &ARailsPlayerController::HandleFireCompleted);
+            &AMainPlayerController::HandleFireCompleted);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleFire"),
                *ActionName);
         BoundActions.Add(Action);
@@ -229,11 +229,11 @@ void ARailsPlayerController::BindInputActions() {
          BoundActions.Num());
 }
 
-void ARailsPlayerController::OnPossess(APawn *InPawn) {
+void AMainPlayerController::OnPossess(APawn *InPawn) {
   Super::OnPossess(InPawn);
 
   UE_LOG(LogProject, Verbose,
-         TEXT("RailsPlayerController::OnPossess - Pawn: %s"),
+         TEXT("MainPlayerController::OnPossess - Pawn: %s"),
          InPawn ? *InPawn->GetName() : TEXT("NULL"));
 
   if (InPawn) {
@@ -257,14 +257,14 @@ void ARailsPlayerController::OnPossess(APawn *InPawn) {
   }
 }
 
-bool ARailsPlayerController::ShouldUseTouchControls() const {
+bool AMainPlayerController::ShouldUseTouchControls() const {
   // are we on a mobile platform? Should we force touch?
   return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
 
 // ========== Movement Handlers ==========
 
-void ARailsPlayerController::HandleMove(const FInputActionValue &Value) {
+void AMainPlayerController::HandleMove(const FInputActionValue &Value) {
   const FVector2D MovementVector = Value.Get<FVector2D>();
 
   APawn *ControlledPawn = GetPawn();
@@ -286,7 +286,7 @@ void ARailsPlayerController::HandleMove(const FInputActionValue &Value) {
   ControlledPawn->AddMovementInput(RightDirection, MovementVector.X);
 }
 
-void ARailsPlayerController::HandleLook(const FInputActionValue &Value) {
+void AMainPlayerController::HandleLook(const FInputActionValue &Value) {
   const FVector2D LookAxisVector = Value.Get<FVector2D>();
 
   // Add yaw and pitch input to controller
@@ -296,13 +296,13 @@ void ARailsPlayerController::HandleLook(const FInputActionValue &Value) {
 
 // ========== Jump Handlers ==========
 
-void ARailsPlayerController::HandleJumpStarted(const FInputActionValue &Value) {
+void AMainPlayerController::HandleJumpStarted(const FInputActionValue &Value) {
   if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
     ControlledCharacter->Jump();
   }
 }
 
-void ARailsPlayerController::HandleJumpCompleted(
+void AMainPlayerController::HandleJumpCompleted(
     const FInputActionValue &Value) {
   if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
     ControlledCharacter->StopJumping();
@@ -311,7 +311,7 @@ void ARailsPlayerController::HandleJumpCompleted(
 
 // ========== Sprint Handlers ==========
 
-void ARailsPlayerController::HandleSprintStarted(
+void AMainPlayerController::HandleSprintStarted(
     const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
@@ -325,7 +325,7 @@ void ARailsPlayerController::HandleSprintStarted(
   }
 }
 
-void ARailsPlayerController::HandleSprintCompleted(
+void AMainPlayerController::HandleSprintCompleted(
     const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
@@ -341,7 +341,7 @@ void ARailsPlayerController::HandleSprintCompleted(
 
 // ========== Interact Handler ==========
 
-void ARailsPlayerController::HandleInteract(const FInputActionValue &Value) {
+void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -356,7 +356,7 @@ void ARailsPlayerController::HandleInteract(const FInputActionValue &Value) {
 
 // ========== Fire Handlers ==========
 
-void ARailsPlayerController::HandleFireStarted(const FInputActionValue &Value) {
+void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -369,7 +369,7 @@ void ARailsPlayerController::HandleFireStarted(const FInputActionValue &Value) {
   }
 }
 
-void ARailsPlayerController::HandleFireCompleted(
+void AMainPlayerController::HandleFireCompleted(
     const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
@@ -383,7 +383,7 @@ void ARailsPlayerController::HandleFireCompleted(
   }
 }
 
-void ARailsPlayerController::SetMouseCursorVisible(bool bVisible) {
+void AMainPlayerController::SetMouseCursorVisible(bool bVisible) {
   bShowMouseCursor = bVisible;
   bIsInteractingWithUI = bVisible;
 
