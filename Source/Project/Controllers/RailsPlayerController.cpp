@@ -6,7 +6,7 @@
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "EpochRails.h"
+#include "Project.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
@@ -25,11 +25,11 @@ ARailsPlayerController::ARailsPlayerController() {
 void ARailsPlayerController::BeginPlay() {
   Super::BeginPlay();
 
-  UE_LOG(LogEpochRails, Log,
+  UE_LOG(LogProject, Log,
          TEXT("RailsPlayerController::BeginPlay - Controller: %s"), *GetName());
-  UE_LOG(LogEpochRails, Log, TEXT("IsLocalPlayerController: %s"),
+  UE_LOG(LogProject, Log, TEXT("IsLocalPlayerController: %s"),
          IsLocalPlayerController() ? TEXT("true") : TEXT("false"));
-  UE_LOG(LogEpochRails, Log, TEXT("ShouldUseTouchControls: %s"),
+  UE_LOG(LogProject, Log, TEXT("ShouldUseTouchControls: %s"),
          ShouldUseTouchControls() ? TEXT("true") : TEXT("false"));
 
   // only spawn touch controls on local player controllers
@@ -40,10 +40,10 @@ void ARailsPlayerController::BeginPlay() {
     if (MobileControlsWidget) {
       // add the controls to the player screen
       MobileControlsWidget->AddToPlayerScreen(0);
-      UE_LOG(LogEpochRails, Log,
+      UE_LOG(LogProject, Log,
              TEXT("Mobile controls widget created and added to screen"));
     } else {
-      UE_LOG(LogEpochRails, Error,
+      UE_LOG(LogProject, Error,
              TEXT("Could not spawn mobile controls widget."));
     }
   }
@@ -52,12 +52,12 @@ void ARailsPlayerController::BeginPlay() {
 void ARailsPlayerController::SetupInputComponent() {
   Super::SetupInputComponent();
 
-  UE_LOG(LogEpochRails, Log,
+  UE_LOG(LogProject, Log,
          TEXT("RailsPlayerController::SetupInputComponent - Controller: %s"),
          *GetName());
-  UE_LOG(LogEpochRails, Log, TEXT("IsLocalPlayerController: %s"),
+  UE_LOG(LogProject, Log, TEXT("IsLocalPlayerController: %s"),
          IsLocalPlayerController() ? TEXT("true") : TEXT("false"));
-  UE_LOG(LogEpochRails, Log, TEXT("InputComponent valid: %s"),
+  UE_LOG(LogProject, Log, TEXT("InputComponent valid: %s"),
          InputComponent ? TEXT("true") : TEXT("false"));
 
   // only add IMCs for local player controllers
@@ -66,26 +66,26 @@ void ARailsPlayerController::SetupInputComponent() {
     if (UEnhancedInputLocalPlayerSubsystem *Subsystem =
             ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
                 GetLocalPlayer())) {
-      UE_LOG(LogEpochRails, Log, TEXT("Enhanced Input Subsystem found"));
-      UE_LOG(LogEpochRails, Log, TEXT("DefaultMappingContexts count: %d"),
+      UE_LOG(LogProject, Log, TEXT("Enhanced Input Subsystem found"));
+      UE_LOG(LogProject, Log, TEXT("DefaultMappingContexts count: %d"),
              DefaultMappingContexts.Num());
 
       for (int32 i = 0; i < DefaultMappingContexts.Num(); ++i) {
         UInputMappingContext *CurrentContext = DefaultMappingContexts[i];
         if (CurrentContext) {
           Subsystem->AddMappingContext(CurrentContext, 0);
-          UE_LOG(LogEpochRails, Log,
+          UE_LOG(LogProject, Log,
                  TEXT("Added DefaultMappingContext [%d]: %s"), i,
                  *CurrentContext->GetName());
         } else {
-          UE_LOG(LogEpochRails, Warning,
+          UE_LOG(LogProject, Warning,
                  TEXT("DefaultMappingContext [%d] is NULL"), i);
         }
       }
 
       // only add these IMCs if we're not using mobile touch input
       if (!ShouldUseTouchControls()) {
-        UE_LOG(LogEpochRails, Log,
+        UE_LOG(LogProject, Log,
                TEXT("MobileExcludedMappingContexts count: %d"),
                MobileExcludedMappingContexts.Num());
 
@@ -94,24 +94,24 @@ void ARailsPlayerController::SetupInputComponent() {
               MobileExcludedMappingContexts[i];
           if (CurrentContext) {
             Subsystem->AddMappingContext(CurrentContext, 0);
-            UE_LOG(LogEpochRails, Log,
+            UE_LOG(LogProject, Log,
                    TEXT("Added MobileExcludedMappingContext [%d]: %s"), i,
                    *CurrentContext->GetName());
           } else {
-            UE_LOG(LogEpochRails, Warning,
+            UE_LOG(LogProject, Warning,
                    TEXT("MobileExcludedMappingContext [%d] is NULL"), i);
           }
         }
       }
     } else {
-      UE_LOG(LogEpochRails, Error,
+      UE_LOG(LogProject, Error,
              TEXT("Failed to get Enhanced Input Subsystem!"));
     }
 
     // Automatically bind all input actions from mapping contexts
     BindInputActions();
   } else {
-    UE_LOG(LogEpochRails, Warning,
+    UE_LOG(LogProject, Warning,
            TEXT("Not a local player controller, skipping input setup"));
   }
 }
@@ -120,12 +120,12 @@ void ARailsPlayerController::BindInputActions() {
   UEnhancedInputComponent *EnhancedInputComponent =
       Cast<UEnhancedInputComponent>(InputComponent);
   if (!EnhancedInputComponent) {
-    UE_LOG(LogEpochRails, Error,
+    UE_LOG(LogProject, Error,
            TEXT("Failed to cast InputComponent to EnhancedInputComponent!"));
     return;
   }
 
-  UE_LOG(LogEpochRails, Log,
+  UE_LOG(LogProject, Log,
          TEXT("EnhancedInputComponent cast successful, binding actions from "
               "IMC..."));
 
@@ -143,12 +143,12 @@ void ARailsPlayerController::BindInputActions() {
       continue;
     }
 
-    UE_LOG(LogEpochRails, Log, TEXT("Processing mapping context: %s"),
+    UE_LOG(LogProject, Log, TEXT("Processing mapping context: %s"),
            *Context->GetName());
 
     // Get all mappings from the context
     const TArray<FEnhancedActionKeyMapping> &Mappings = Context->GetMappings();
-    UE_LOG(LogEpochRails, Log, TEXT("Found %d mappings in context"),
+    UE_LOG(LogProject, Log, TEXT("Found %d mappings in context"),
            Mappings.Num());
 
     for (const FEnhancedActionKeyMapping &Mapping : Mappings) {
@@ -158,7 +158,7 @@ void ARailsPlayerController::BindInputActions() {
       }
 
       FString ActionName = Action->GetName();
-      UE_LOG(LogEpochRails, Log, TEXT("Found Input Action: %s"), *ActionName);
+      UE_LOG(LogProject, Log, TEXT("Found Input Action: %s"), *ActionName);
 
       // Bind based on action name
       if (ActionName.Contains(TEXT("Move")) ||
@@ -166,7 +166,7 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
                                            this,
                                            &ARailsPlayerController::HandleMove);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleMove"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleMove"),
                *ActionName);
         BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Look")) ||
@@ -174,7 +174,7 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
                                            this,
                                            &ARailsPlayerController::HandleLook);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleLook"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleLook"),
                *ActionName);
         BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Jump")) ||
@@ -185,7 +185,7 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &ARailsPlayerController::HandleJumpCompleted);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleJump"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleJump"),
                *ActionName);
         BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Sprint")) ||
@@ -196,7 +196,7 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &ARailsPlayerController::HandleSprintCompleted);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleSprint"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleSprint"),
                *ActionName);
         BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Interact")) ||
@@ -204,7 +204,7 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
             &ARailsPlayerController::HandleInteract);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleInteract"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleInteract"),
                *ActionName);
         BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Fire")) ||
@@ -215,43 +215,43 @@ void ARailsPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &ARailsPlayerController::HandleFireCompleted);
-        UE_LOG(LogEpochRails, Log, TEXT("Bound action '%s' to HandleFire"),
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleFire"),
                *ActionName);
         BoundActions.Add(Action);
       } else {
-        UE_LOG(LogEpochRails, Warning, TEXT("No handler found for action: %s"),
+        UE_LOG(LogProject, Warning, TEXT("No handler found for action: %s"),
                *ActionName);
       }
     }
   }
 
-  UE_LOG(LogEpochRails, Log, TEXT("Total actions bound: %d"),
+  UE_LOG(LogProject, Log, TEXT("Total actions bound: %d"),
          BoundActions.Num());
 }
 
 void ARailsPlayerController::OnPossess(APawn *InPawn) {
   Super::OnPossess(InPawn);
 
-  UE_LOG(LogEpochRails, Verbose,
+  UE_LOG(LogProject, Verbose,
          TEXT("RailsPlayerController::OnPossess - Pawn: %s"),
          InPawn ? *InPawn->GetName() : TEXT("NULL"));
 
   if (InPawn) {
     ACharacter *PossessedCharacter = Cast<ACharacter>(InPawn);
     if (PossessedCharacter) {
-      UE_LOG(LogEpochRails, Verbose, TEXT("Possessed Character: %s"),
+      UE_LOG(LogProject, Verbose, TEXT("Possessed Character: %s"),
              *PossessedCharacter->GetName());
       if (UCharacterMovementComponent *MovementComp =
               PossessedCharacter->GetCharacterMovement()) {
-        UE_LOG(LogEpochRails, Verbose,
+        UE_LOG(LogProject, Verbose,
                TEXT("CharacterMovementComponent found, MovementMode: %d"),
                (int32)MovementComp->MovementMode);
       } else {
-        UE_LOG(LogEpochRails, Warning,
+        UE_LOG(LogProject, Warning,
                TEXT("CharacterMovementComponent not found on Character!"));
       }
     } else {
-      UE_LOG(LogEpochRails, Warning,
+      UE_LOG(LogProject, Warning,
              TEXT("Possessed pawn is not a Character!"));
     }
   }
@@ -321,7 +321,7 @@ void ARailsPlayerController::HandleSprintStarted(
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StartSprint(ControlledPawn);
-    UE_LOG(LogEpochRails, Log, TEXT("Sprint started via interface"));
+    UE_LOG(LogProject, Log, TEXT("Sprint started via interface"));
   }
 }
 
@@ -335,7 +335,7 @@ void ARailsPlayerController::HandleSprintCompleted(
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StopSprint(ControlledPawn);
-    UE_LOG(LogEpochRails, Log, TEXT("Sprint stopped via interface"));
+    UE_LOG(LogProject, Log, TEXT("Sprint stopped via interface"));
   }
 }
 
@@ -350,7 +350,7 @@ void ARailsPlayerController::HandleInteract(const FInputActionValue &Value) {
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_DoInteract(ControlledPawn);
-    UE_LOG(LogEpochRails, Log, TEXT("Interact triggered via interface"));
+    UE_LOG(LogProject, Log, TEXT("Interact triggered via interface"));
   }
 }
 
@@ -365,7 +365,7 @@ void ARailsPlayerController::HandleFireStarted(const FInputActionValue &Value) {
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StartFire(ControlledPawn);
-    UE_LOG(LogEpochRails, Log, TEXT("Fire started via interface"));
+    UE_LOG(LogProject, Log, TEXT("Fire started via interface"));
   }
 }
 
@@ -379,7 +379,7 @@ void ARailsPlayerController::HandleFireCompleted(
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StopFire(ControlledPawn);
-    UE_LOG(LogEpochRails, Log, TEXT("Fire stopped via interface"));
+    UE_LOG(LogProject, Log, TEXT("Fire stopped via interface"));
   }
 }
 
@@ -395,12 +395,12 @@ void ARailsPlayerController::SetMouseCursorVisible(bool bVisible) {
     InputMode.SetHideCursorDuringCapture(false);
     SetInputMode(InputMode);
 
-    UE_LOG(LogEpochRails, Log, TEXT("Mouse cursor enabled for UI interaction"));
+    UE_LOG(LogProject, Log, TEXT("Mouse cursor enabled for UI interaction"));
   } else {
     // Game input only
     FInputModeGameOnly InputMode;
     SetInputMode(InputMode);
 
-    UE_LOG(LogEpochRails, Log, TEXT("Mouse cursor disabled, game mode active"));
+    UE_LOG(LogProject, Log, TEXT("Mouse cursor disabled, game mode active"));
   }
 }

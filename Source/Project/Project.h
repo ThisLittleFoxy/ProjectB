@@ -5,4 +5,4 @@
 #include "CoreMinimal.h"
 
 /** Main log category used across the project */
-DECLARE_LOG_CATEGORY_EXTERN(LogEpochRails, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogProject, Log, All);
