@@ -32,7 +32,7 @@ enum class EInteractionType : uint8 {
  * events Supports custom animations for different interaction types
  */
 UCLASS(Blueprintable)
-class EPOCHRAILS_API AInteractableActor : public AActor,
+class PROJECT_API AInteractableActor : public AActor,
                                           public IInteractableInterface {
   GENERATED_BODY()
 
