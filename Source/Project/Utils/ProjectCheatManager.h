@@ -8,7 +8,7 @@
  * Project cheat manager for debug commands
  */
 UCLASS()
-class EPOCHRAILS_API UProjectCheatManager : public UCheatManager {
+class PROJECT_API UProjectCheatManager : public UCheatManager {
   GENERATED_BODY()
 
 public:

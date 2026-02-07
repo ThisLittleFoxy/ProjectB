@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "RailsPlayerController.generated.h"
+#include "MainPlayerController.generated.h"
 
 class UInputMappingContext;
 class UUserWidget;
@@ -21,11 +21,11 @@ struct FInputActionValue;
  * Sprint, Interact, and Fire inputs.
  */
 UCLASS(abstract)
-class ARailsPlayerController : public APlayerController {
+class AMainPlayerController : public APlayerController {
   GENERATED_BODY()
 
 public:
-  ARailsPlayerController();
+  AMainPlayerController();
 
 protected:
   // ========== Input Mapping Contexts ==========

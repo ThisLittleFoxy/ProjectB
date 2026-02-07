@@ -16,7 +16,7 @@ class UCameraComponent;
  * Also handles UI widget interactions via crosshair
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class EPOCHRAILS_API UInteractionComponent : public UActorComponent {
+class PROJECT_API UInteractionComponent : public UActorComponent {
   GENERATED_BODY()
 
 public:

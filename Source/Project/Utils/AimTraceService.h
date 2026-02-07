@@ -3,12 +3,12 @@
 #include "CoreMinimal.h"
 
 /**
- * Сервис для трассировки лучей из камеры игрока
- * Используется для взаимодействия с объектами, строительства и т.д.
+ * пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+ * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ.пїЅ.
  */
-class EPOCHRAILS_API FAimTraceService{
+class PROJECT_API FAimTraceService{
   public :
-      // Построить луч из центра экрана
+      // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
       static bool MakeScreenCenterRay(const APlayerController *PC,
                                       float Distance, FVector &OutStart,
                                       FVector &OutEnd){if (!PC) return false;
@@ -27,7 +27,7 @@ if (PC->DeprojectScreenPositionToWorld(Center.X, Center.Y, Origin, Dir)) {
 return false;
 }
 
-// Построить луч из точки обзора контроллера (для серверной валидации)
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 static bool MakeViewPointRay(const AController *Controller, float Distance,
                              FVector &OutStart, FVector &OutEnd) {
   if (!Controller)
@@ -42,7 +42,7 @@ static bool MakeViewPointRay(const AController *Controller, float Distance,
   return true;
 }
 
-// Унифицированная линейная трасса из центра экрана
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 static bool TraceFromScreenCenter(UWorld *World, const APlayerController *PC,
                                   float Distance, ECollisionChannel Channel,
                                   const TArray<AActor *> &ActorsToIgnore,
@@ -65,7 +65,7 @@ static bool TraceFromScreenCenter(UWorld *World, const APlayerController *PC,
   return World->LineTraceSingleByChannel(OutHit, Start, End, Channel, Params);
 }
 
-// Трасса из ViewPoint (альтернатива)
+// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ ViewPoint (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 static bool TraceFromViewPoint(UWorld *World, const AController *Controller,
                                float Distance, ECollisionChannel Channel,
                                const TArray<AActor *> &ActorsToIgnore,

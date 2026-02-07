@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class EpochRailsTarget : TargetRules
+public class ProjectTarget : TargetRules
 {
-	public EpochRailsTarget(TargetInfo Target) : base(Target)
+	public ProjectTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V6;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
-		ExtraModuleNames.Add("EpochRails");
+		ExtraModuleNames.Add("Project");
 	}
 }

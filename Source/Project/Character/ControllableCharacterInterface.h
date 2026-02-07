@@ -7,7 +7,7 @@
 #include "ControllableCharacterInterface.generated.h"
 
 /**
- * Interface for characters that can be controlled by RailsPlayerController.
+ * Interface for characters that can be controlled by MainPlayerController.
  * Implement this interface in your Blueprint Character to receive input from the controller.
  *
  * For FPS movement, the controller handles directional calculation using GetControlRotation(),
