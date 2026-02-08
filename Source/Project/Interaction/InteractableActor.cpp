@@ -3,6 +3,7 @@
 #include "InteractableActor.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
@@ -115,7 +116,15 @@ bool AInteractableActor::PlayInteractionAnimation(
   }
 
   // Get character's animation instance
-  UAnimInstance *AnimInstance = PlayerCharacter->GetMesh()->GetAnimInstance();
+  USkeletalMeshComponent *MeshComponent = PlayerCharacter->GetMesh();
+  if (!MeshComponent) {
+    UE_LOG(LogTemp, Warning,
+           TEXT("%s: Cannot play animation - PlayerCharacter has no mesh"),
+           *GetName());
+    return false;
+  }
+
+  UAnimInstance *AnimInstance = MeshComponent->GetAnimInstance();
   if (!AnimInstance) {
     UE_LOG(LogTemp, Warning, TEXT("%s: Cannot get AnimInstance from character"),
            *GetName());
@@ -157,13 +166,20 @@ bool AInteractableActor::PlayInteractionAnimation(
       // Calculate actual playback duration accounting for play rate
       float ActualDuration = MontageLength / AnimationPlayRate;
 
+      TWeakObjectPtr<AInteractableActor> WeakThis(this);
+      TWeakObjectPtr<ACharacter> WeakCharacter = PlayerCharacter;
+
       // Set timer to call completion callback
-      GetWorld()->GetTimerManager().SetTimer(
-          AnimationCompleteTimerHandle,
-          [this, PlayerCharacter]() {
-            OnInteractionAnimationComplete(PlayerCharacter);
-          },
-          ActualDuration, false);
+      if (UWorld *World = GetWorld()) {
+        World->GetTimerManager().SetTimer(
+            AnimationCompleteTimerHandle,
+            [WeakThis, WeakCharacter]() {
+              if (WeakThis.IsValid() && WeakCharacter.IsValid()) {
+                WeakThis->OnInteractionAnimationComplete(WeakCharacter.Get());
+              }
+            },
+            ActualDuration, false);
+      }
     }
 
     return true;
@@ -219,13 +235,15 @@ void AInteractableActor::OnInteractionAnimationComplete(
   AnimatingCharacter = nullptr;
 
   // Clear timer handle
-  GetWorld()->GetTimerManager().ClearTimer(AnimationCompleteTimerHandle);
+  if (UWorld *World = GetWorld()) {
+    World->GetTimerManager().ClearTimer(AnimationCompleteTimerHandle);
+  }
 
   // Call Blueprint event
   BP_OnAnimationComplete(PlayerCharacter);
 
   // Now trigger the actual interaction logic
-  if (PlayerCharacter) {
+  if (IsValid(PlayerCharacter)) {
     BP_OnInteract(PlayerCharacter);
   }
 }
