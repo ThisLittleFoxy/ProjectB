@@ -116,15 +116,15 @@ bool AInteractableActor::PlayInteractionAnimation(
   }
 
   // Get character's animation instance
-  USkeletalMeshComponent *MeshComponent = PlayerCharacter->GetMesh();
-  if (!MeshComponent) {
+  USkeletalMeshComponent *CharacterMesh = PlayerCharacter->GetMesh();
+  if (!CharacterMesh) {
     UE_LOG(LogTemp, Warning,
            TEXT("%s: Cannot play animation - PlayerCharacter has no mesh"),
            *GetName());
     return false;
   }
 
-  UAnimInstance *AnimInstance = MeshComponent->GetAnimInstance();
+  UAnimInstance *AnimInstance = CharacterMesh->GetAnimInstance();
   if (!AnimInstance) {
     UE_LOG(LogTemp, Warning, TEXT("%s: Cannot get AnimInstance from character"),
            *GetName());
