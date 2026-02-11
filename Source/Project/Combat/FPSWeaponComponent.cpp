@@ -3,6 +3,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/WeaponBase.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -99,13 +100,31 @@ void UFPSWeaponComponent::OnRep_CurrentWeapon()
 
 void UFPSWeaponComponent::AttachWeaponToOwnerMesh(AWeaponBase* WeaponToAttach) const
 {
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter || !WeaponToAttach || !OwnerCharacter->GetMesh())
+    USkeletalMeshComponent* AttachMesh = ResolveAttachMeshComponent();
+    if (!WeaponToAttach || !AttachMesh)
     {
         return;
     }
 
-    WeaponToAttach->AttachToComponent(OwnerCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponAttachSocket);
+    WeaponToAttach->AttachToComponent(AttachMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponAttachSocket);
+}
+
+USkeletalMeshComponent* UFPSWeaponComponent::ResolveAttachMeshComponent() const
+{
+    if (USceneComponent* SelectedComponent = WeaponAttachComponent.GetComponent(GetOwner()))
+    {
+        if (USkeletalMeshComponent* SelectedSkeletal = Cast<USkeletalMeshComponent>(SelectedComponent))
+        {
+            return SelectedSkeletal;
+        }
+    }
+
+    if (const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+    {
+        return OwnerCharacter->GetMesh();
+    }
+
+    return nullptr;
 }
 
 void UFPSWeaponComponent::HandleOwnerDeath()

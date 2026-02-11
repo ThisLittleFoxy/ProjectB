@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Engine/EngineTypes.h"
 #include "FPSWeaponComponent.generated.h"
 
 class AWeaponBase;
@@ -43,6 +44,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Weapon")
     FName WeaponAttachSocket = TEXT("WeaponSocket");
 
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Weapon", meta=(UseComponentPicker, AllowedClasses="/Script/Engine.SkeletalMeshComponent"))
+    FComponentReference WeaponAttachComponent;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input")
     TObjectPtr<UInputMappingContext> DefaultInputMapping;
 
@@ -59,4 +64,5 @@ protected:
     void HandleOwnerDeath();
 
     void AttachWeaponToOwnerMesh(AWeaponBase* WeaponToAttach) const;
+    USkeletalMeshComponent* ResolveAttachMeshComponent() const;
 };
