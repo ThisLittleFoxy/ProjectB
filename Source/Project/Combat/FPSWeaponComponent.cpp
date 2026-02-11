@@ -3,7 +3,6 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/WeaponBase.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Components/SceneComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -111,7 +110,7 @@ void UFPSWeaponComponent::AttachWeaponToOwnerMesh(AWeaponBase* WeaponToAttach) c
 
 USkeletalMeshComponent* UFPSWeaponComponent::ResolveAttachMeshComponent() const
 {
-    if (USceneComponent* SelectedComponent = WeaponAttachComponent.GetComponent(GetOwner()))
+    if (UActorComponent* SelectedComponent = WeaponAttachComponent.GetComponent(GetOwner()))
     {
         if (USkeletalMeshComponent* SelectedSkeletal = Cast<USkeletalMeshComponent>(SelectedComponent))
         {
