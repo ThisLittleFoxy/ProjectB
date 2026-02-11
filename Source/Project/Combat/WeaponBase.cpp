@@ -212,7 +212,7 @@ bool AWeaponBase::CanLocalFire() const
     return OwnerPawn && OwnerPawn->GetController() != nullptr;
 }
 
-bool AWeaponBase::CanServerAcceptShot() const
+bool AWeaponBase::CanServerAcceptShot()
 {
     if (!HasAuthority() || !GetWorld())
     {

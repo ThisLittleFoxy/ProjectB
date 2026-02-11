@@ -104,7 +104,7 @@ protected:
     FShotResultData SimulateShot(const FVector& CamLocation, const FVector& CamDirection, int32 SpreadSeed, bool bApplyDamage);
 
     bool CanLocalFire() const;
-    bool CanServerAcceptShot() const;
+    bool CanServerAcceptShot();
 
     FVector GetCameraLocation() const;
     FVector GetCameraDirection() const;
