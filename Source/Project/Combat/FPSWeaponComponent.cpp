@@ -1,5 +1,6 @@
 #include "Combat/FPSWeaponComponent.h"
 
+#include "Project.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WeaponBase.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -102,7 +103,14 @@ void UFPSWeaponComponent::AttachWeaponToOwnerMesh(AWeaponBase* WeaponToAttach) c
     USkeletalMeshComponent* AttachMesh = ResolveAttachMeshComponent();
     if (!WeaponToAttach || !AttachMesh)
     {
+        UE_LOG(LogProject, Warning, TEXT("Weapon attach skipped: Weapon or attach mesh is invalid on %s"), *GetNameSafe(GetOwner()));
         return;
+    }
+
+    if (!WeaponAttachSocket.IsNone() && !AttachMesh->DoesSocketExist(WeaponAttachSocket))
+    {
+        UE_LOG(LogProject, Warning, TEXT("Socket '%s' not found on mesh '%s'. Weapon will attach to component root."),
+            *WeaponAttachSocket.ToString(), *GetNameSafe(AttachMesh));
     }
 
     WeaponToAttach->AttachToComponent(AttachMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponAttachSocket);
