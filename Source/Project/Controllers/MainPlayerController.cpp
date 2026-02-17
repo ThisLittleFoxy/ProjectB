@@ -3,10 +3,12 @@
 #include "MainPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "Character/ControllableCharacterInterface.h"
+#include "Combat/CombatComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Project.h"
+#include "Interaction/InteractionComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
@@ -347,6 +349,14 @@ void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
     return;
   }
 
+  // Prefer direct component call to avoid mandatory BP graph wiring
+  if (UInteractionComponent *InteractionComp =
+          ControlledPawn->FindComponentByClass<UInteractionComponent>()) {
+    InteractionComp->TryInteract();
+    UE_LOG(LogProject, Log, TEXT("Interact triggered via InteractionComponent"));
+    return;
+  }
+
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_DoInteract(ControlledPawn);
@@ -362,6 +372,14 @@ void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
     return;
   }
 
+  // Prefer component-driven combat flow (no EventGraph setup required)
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    CombatComp->StartFire();
+    UE_LOG(LogProject, Log, TEXT("Fire started via CombatComponent"));
+    return;
+  }
+
   // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StartFire(ControlledPawn);
@@ -373,6 +391,14 @@ void AMainPlayerController::HandleFireCompleted(
     const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
+    return;
+  }
+
+  // Prefer component-driven combat flow (no EventGraph setup required)
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    CombatComp->StopFire();
+    UE_LOG(LogProject, Log, TEXT("Fire stopped via CombatComponent"));
     return;
   }
 
