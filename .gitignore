@@ -1,5 +1,7 @@
 # Visual Studio 2022
 .vs/
+.vscode/
+.ignore
 *.suo
 *.user
 *.userosscache
@@ -90,3 +92,4 @@ $RECYCLE.BIN/
 .worktrees/
 .security-key
 logs/security/
+Project.code-workspace
