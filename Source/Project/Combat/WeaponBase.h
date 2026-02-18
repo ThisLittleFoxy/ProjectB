@@ -8,6 +8,7 @@
 
 class APawn;
 class AController;
+class APlayerController;
 class USkeletalMeshComponent;
 class UParticleSystem;
 class USoundBase;
@@ -30,6 +31,7 @@ public:
   AWeaponBase();
 
   virtual void BeginPlay() override;
+  virtual void Tick(float DeltaSeconds) override;
 
   /** Sets owning pawn/controller context for traces and damage instigator */
   UFUNCTION(BlueprintCallable, Category = "Weapon")
@@ -66,6 +68,16 @@ public:
   UFUNCTION(BlueprintPure, Category = "Weapon")
   USkeletalMeshComponent *GetWeaponMesh() const { return WeaponMesh; }
 
+  UFUNCTION(BlueprintCallable, Category = "Weapon|Aim")
+  void SetAiming(bool bNewAiming);
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Aim")
+  bool IsAiming() const { return bIsAiming; }
+
+  /** Called after each successful shot recoil calculation (for BP visual effects) */
+  UFUNCTION(BlueprintImplementableEvent, Category = "Weapon|Recoil")
+  void BP_OnRecoilApplied(float RecoilYawDeg, float RecoilPitchDeg);
+
 protected:
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
   TObjectPtr<USkeletalMeshComponent> WeaponMesh;
@@ -92,6 +104,103 @@ protected:
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Fire",
             meta = (ClampMin = "0.0", ClampMax = "15.0"))
   float SpreadAngleDeg = 0.35f;
+
+  /** Multiplier applied to spread while aiming (scope) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Aim",
+            meta = (ClampMin = "0.01", ClampMax = "2.0"))
+  float AimingSpreadMultiplier = 0.5f;
+
+  // ========== Recoil / Spray ==========
+
+  /**
+   * Spray pattern in degrees per shot.
+   * X = Yaw (left/right), Y = Pitch (up/down).
+   */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil")
+  TArray<FVector2D> SprayPattern;
+
+  /**
+   * If true, pattern loops when shot index exceeds array size.
+   * If false, weapon keeps using the last pattern point.
+   */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil")
+  bool bLoopSprayPattern = false;
+
+  /** Extra random yaw jitter (degrees) added on top of spray pattern */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "10.0"))
+  float RandomRecoilYawDeg = 0.08f;
+
+  /** Extra random pitch jitter (degrees) added on top of spray pattern */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "10.0"))
+  float RandomRecoilPitchDeg = 0.08f;
+
+  /** Random recoil multiplier while aiming (scope) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "1.0"))
+  float AimingRecoilRandomMultiplier = 0.4f;
+
+  /** If true, player camera receives recoil kick each shot */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil")
+  bool bApplyCameraRecoil = true;
+
+  /** Camera pitch kick multiplier from recoil pattern/jitter */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "5.0",
+                    EditCondition = "bApplyCameraRecoil"))
+  float CameraRecoilPitchMultiplier = 1.0f;
+
+  /** Camera yaw kick multiplier from recoil pattern/jitter */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "5.0",
+                    EditCondition = "bApplyCameraRecoil"))
+  float CameraRecoilYawMultiplier = 1.0f;
+
+  /** Additional camera recoil reduction while aiming (scope) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", ClampMax = "1.0",
+                    EditCondition = "bApplyCameraRecoil"))
+  float AimingCameraRecoilMultiplier = 0.65f;
+
+  /**
+   * How quickly camera approaches recoil target (kick smoothness).
+   * Higher = snappier kick.
+   */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", EditCondition = "bApplyCameraRecoil"))
+  float CameraRecoilKickInterpSpeed = 24.0f;
+
+  /**
+   * How quickly recoil target returns back to zero.
+   * Higher = faster recovery.
+   */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", EditCondition = "bApplyCameraRecoil"))
+  float CameraRecoilReturnSpeed = 4.0f;
+
+  /**
+   * If false, recoil does not return while trigger is held (more persistent spray feel).
+   * If true, recoil slowly returns even during continuous fire.
+   */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (EditCondition = "bApplyCameraRecoil"))
+  bool bReturnCameraRecoilWhileFiring = false;
+
+  /** Maximum accumulated pitch recoil offset (degrees) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", EditCondition = "bApplyCameraRecoil"))
+  float MaxAccumulatedCameraPitchRecoil = 12.0f;
+
+  /** Maximum accumulated yaw recoil offset (degrees) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0", EditCondition = "bApplyCameraRecoil"))
+  float MaxAccumulatedCameraYawRecoil = 8.0f;
+
+  /** Reset spray shot index if we did not fire for this time (seconds) */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Recoil",
+            meta = (ClampMin = "0.0"))
+  float SprayResetDelay = 0.3f;
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Fire")
   TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
@@ -139,15 +248,28 @@ protected:
 
 private:
   TWeakObjectPtr<APawn> OwningPawn;
+  TWeakObjectPtr<APlayerController> CachedLocalPlayerController;
   FTimerHandle AutoFireTimerHandle;
   bool bIsTriggerHeld = false;
+  bool bIsAiming = false;
+  int32 BurstShotIndex = 0;
+  float LastShotTimeSeconds = -1000.0f;
+  FVector2D CameraRecoilTargetOffsetDeg = FVector2D::ZeroVector;
+  FVector2D CameraRecoilAppliedOffsetDeg = FVector2D::ZeroVector;
+  FRotator LastControlRotationBeforeRecoil = FRotator::ZeroRotator;
+  bool bHasLastControlRotationBeforeRecoil = false;
 
   float GetTimeBetweenShots() const;
   bool HasAmmo() const;
   bool ConsumeAmmo();
   void HandleAutoFireTick();
+  FVector2D BuildRecoilOffsetForShot();
+  FVector2D GetPatternOffsetForShot(int32 ShotIndex) const;
+  void ApplyCameraRecoil(const FVector2D &RecoilOffsetDeg);
+  APlayerController *ResolveLocalPlayerController();
   AController *GetOwningController() const;
   FVector GetMuzzleLocation() const;
   bool MakeShotTrace(FHitResult &OutHit, FVector &OutTraceStart,
-                     FVector &OutTraceEnd) const;
+                     FVector &OutTraceEnd,
+                     const FVector2D &RecoilOffsetDeg) const;
 };

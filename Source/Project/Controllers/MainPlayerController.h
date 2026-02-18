@@ -8,6 +8,7 @@
 
 class UInputMappingContext;
 class UUserWidget;
+class UCrosshairWidgetBase;
 struct FInputActionValue;
 
 /**
@@ -51,6 +52,21 @@ protected:
   /** If true, force UMG touch controls even on non-mobile platforms */
   UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
   bool bForceTouchControls = false;
+
+  // ========== HUD ==========
+
+  /** Main in-game HUD widget (crosshair/ammo/health) */
+  UPROPERTY(EditAnywhere, Category = "UI|HUD")
+  TSubclassOf<UCrosshairWidgetBase> HUDWidgetClass;
+
+  /** HUD z-order when added to player screen */
+  UPROPERTY(EditAnywhere, Category = "UI|HUD")
+  int32 HUDWidgetZOrder = 0;
+
+  /** Spawned HUD widget instance */
+  UPROPERTY(Transient, BlueprintReadOnly, Category = "UI|HUD",
+            meta = (AllowPrivateAccess = "true"))
+  TObjectPtr<UCrosshairWidgetBase> HUDWidget;
 
   // ========== UI State ==========
 
@@ -109,6 +125,18 @@ protected:
   /** Fire completed */
   UFUNCTION()
   void HandleFireCompleted(const FInputActionValue &Value);
+
+  /** Reload pressed */
+  UFUNCTION()
+  void HandleReload(const FInputActionValue &Value);
+
+  /** Scope/aim started (e.g. RMB pressed) */
+  UFUNCTION()
+  void HandleScopeStarted(const FInputActionValue &Value);
+
+  /** Scope/aim ended (e.g. RMB released) */
+  UFUNCTION()
+  void HandleScopeCompleted(const FInputActionValue &Value);
 
 public:
   /** Show/hide mouse cursor and set appropriate input mode */

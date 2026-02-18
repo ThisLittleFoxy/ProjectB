@@ -4,6 +4,8 @@
 #include "GameFramework/CheatManager.h"
 #include "ProjectCheatManager.generated.h"
 
+class APawn;
+
 /**
  * Project cheat manager for debug commands
  */
@@ -23,4 +25,23 @@ public:
   /** Toggle god mode */
   UFUNCTION(Exec, Category = "Debug")
   void GodMode();
+
+  /** Spawn a damage test cube in front of the player */
+  UFUNCTION(Exec, Category = "Debug")
+  void SpawnDamageCube();
+
+  /** Backward-compatible alias for SpawnDamageCube */
+  UFUNCTION(Exec, Category = "Debug")
+  void SpawnPlayerCopy();
+
+  /** Apply damage to actor under crosshair */
+  UFUNCTION(Exec, Category = "Debug")
+  void DamageCrosshair(float DamageAmount = 25.0f);
+
+  /** Instantly kill actor under crosshair */
+  UFUNCTION(Exec, Category = "Debug")
+  void KillCrosshair();
+
+private:
+  APawn *GetControlledPawn() const;
 };

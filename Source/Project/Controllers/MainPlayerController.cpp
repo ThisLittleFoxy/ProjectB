@@ -7,12 +7,14 @@
 #include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "Project.h"
 #include "Interaction/InteractionComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Project.h"
+#include "UI/HUD/CrosshairWidgetBase.h"
+#include "Utils/ProjectCheatManager.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 AMainPlayerController::AMainPlayerController() {
@@ -22,6 +24,8 @@ AMainPlayerController::AMainPlayerController() {
   bEnableTouchEvents = true;
   bEnableMouseOverEvents = false;
   bEnableTouchOverEvents = false;
+
+  CheatClass = UProjectCheatManager::StaticClass();
 }
 
 void AMainPlayerController::BeginPlay() {
@@ -33,6 +37,18 @@ void AMainPlayerController::BeginPlay() {
          IsLocalPlayerController() ? TEXT("true") : TEXT("false"));
   UE_LOG(LogProject, Log, TEXT("ShouldUseTouchControls: %s"),
          ShouldUseTouchControls() ? TEXT("true") : TEXT("false"));
+
+  // spawn main gameplay HUD for local player
+  if (IsLocalPlayerController() && HUDWidgetClass) {
+    HUDWidget = CreateWidget<UCrosshairWidgetBase>(this, HUDWidgetClass);
+    if (HUDWidget) {
+      HUDWidget->AddToPlayerScreen(HUDWidgetZOrder);
+      UE_LOG(LogProject, Log, TEXT("HUD widget created: %s"),
+             *GetNameSafe(HUDWidget));
+    } else {
+      UE_LOG(LogProject, Error, TEXT("Could not spawn HUD widget."));
+    }
+  }
 
   // only spawn touch controls on local player controllers
   if (ShouldUseTouchControls() && IsLocalPlayerController()) {
@@ -218,6 +234,29 @@ void AMainPlayerController::BindInputActions() {
             Action, ETriggerEvent::Completed, this,
             &AMainPlayerController::HandleFireCompleted);
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleFire"),
+               *ActionName);
+        BoundActions.Add(Action);
+      } else if (ActionName.Contains(TEXT("Reload")) ||
+                 ActionName.Contains(TEXT("IA_Reload"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleReload);
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleReload"),
+               *ActionName);
+        BoundActions.Add(Action);
+      } else if (ActionName.Contains(TEXT("Scope")) ||
+                 ActionName.Contains(TEXT("IA_Scope")) ||
+                 ActionName.Contains(TEXT("Aim"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleScopeStarted);
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Completed, this,
+            &AMainPlayerController::HandleScopeCompleted);
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Canceled, this,
+            &AMainPlayerController::HandleScopeCompleted);
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleScope"),
                *ActionName);
         BoundActions.Add(Action);
       } else {
@@ -406,6 +445,47 @@ void AMainPlayerController::HandleFireCompleted(
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StopFire(ControlledPawn);
     UE_LOG(LogProject, Log, TEXT("Fire stopped via interface"));
+  }
+}
+
+void AMainPlayerController::HandleReload(const FInputActionValue &Value) {
+  APawn *ControlledPawn = GetPawn();
+  if (!ControlledPawn) {
+    return;
+  }
+
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    const bool bReloaded = CombatComp->Reload();
+    UE_LOG(LogProject, Log, TEXT("Reload via CombatComponent: %s"),
+           bReloaded ? TEXT("true") : TEXT("false"));
+  }
+}
+
+void AMainPlayerController::HandleScopeStarted(const FInputActionValue &Value) {
+  APawn *ControlledPawn = GetPawn();
+  if (!ControlledPawn) {
+    return;
+  }
+
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    CombatComp->StartScope();
+    UE_LOG(LogProject, Log, TEXT("Scope started via CombatComponent"));
+  }
+}
+
+void AMainPlayerController::HandleScopeCompleted(
+    const FInputActionValue &Value) {
+  APawn *ControlledPawn = GetPawn();
+  if (!ControlledPawn) {
+    return;
+  }
+
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    CombatComp->StopScope();
+    UE_LOG(LogProject, Log, TEXT("Scope stopped via CombatComponent"));
   }
 }
 

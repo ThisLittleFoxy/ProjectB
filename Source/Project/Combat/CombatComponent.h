@@ -8,6 +8,7 @@
 
 class ACharacter;
 class AWeaponBase;
+class UCameraComponent;
 class UInteractionComponent;
 class USkeletalMeshComponent;
 
@@ -43,6 +44,25 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Combat")
   bool Reload();
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
+  int32 GetAmmoInMagazine() const;
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
+  int32 GetAmmoInReserve() const;
+
+  /** Current magazine + reserve ammo */
+  UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
+  int32 GetAmmoTotalAvailable() const;
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Aim")
+  void StartScope();
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Aim")
+  void StopScope();
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Aim")
+  bool IsScoping() const { return bIsScoping; }
 
   UFUNCTION(BlueprintPure, Category = "Combat")
   AWeaponBase *GetCurrentWeapon() const { return CurrentWeapon; }
@@ -82,6 +102,16 @@ protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Input")
   bool bFireInteractsWithWidgets = true;
 
+  // ========== Aim / Scope ==========
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim")
+  bool bEnableScopeFov = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim",
+            meta = (ClampMin = "1.0", ClampMax = "179.0",
+                    EditCondition = "bEnableScopeFov"))
+  float ScopedFieldOfView = 70.0f;
+
 private:
   UPROPERTY(Transient)
   TObjectPtr<ACharacter> OwningCharacter;
@@ -90,14 +120,23 @@ private:
   TObjectPtr<UInteractionComponent> CachedInteractionComponent;
 
   UPROPERTY(Transient)
+  TObjectPtr<UCameraComponent> CachedCameraComponent;
+
+  UPROPERTY(Transient)
   TObjectPtr<USkeletalMeshComponent> CachedAttachMesh;
 
   UPROPERTY(Transient, BlueprintReadOnly, Category = "Combat",
             meta = (AllowPrivateAccess = "true"))
   TObjectPtr<AWeaponBase> CurrentWeapon;
 
+  UPROPERTY(Transient)
+  float DefaultFieldOfView = 0.0f;
+
+  UPROPERTY(Transient)
+  bool bIsScoping = false;
+
   void CacheOwnerReferences();
+  UCameraComponent *ResolveCameraComponent() const;
   UInteractionComponent *ResolveInteractionComponent() const;
   USkeletalMeshComponent *ResolveAttachMesh() const;
 };
-

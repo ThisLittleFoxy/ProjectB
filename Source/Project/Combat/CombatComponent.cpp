@@ -172,7 +172,9 @@ void UCombatComponent::UnequipCurrentWeapon(bool bDestroyWeapon) {
     return;
   }
 
+  StopScope();
   CurrentWeapon->StopFire();
+  CurrentWeapon->SetAiming(false);
 
   if (bDestroyWeapon) {
     CurrentWeapon->Destroy();
@@ -215,10 +217,84 @@ bool UCombatComponent::Reload() {
   return CurrentWeapon ? CurrentWeapon->Reload() : false;
 }
 
+int32 UCombatComponent::GetAmmoInMagazine() const {
+  return CurrentWeapon ? CurrentWeapon->GetAmmoInMagazine() : 0;
+}
+
+int32 UCombatComponent::GetAmmoInReserve() const {
+  return CurrentWeapon ? CurrentWeapon->GetReserveAmmo() : 0;
+}
+
+int32 UCombatComponent::GetAmmoTotalAvailable() const {
+  if (!CurrentWeapon) {
+    return 0;
+  }
+
+  return CurrentWeapon->GetAmmoInMagazine() + CurrentWeapon->GetReserveAmmo();
+}
+
+void UCombatComponent::StartScope() {
+  bIsScoping = true;
+
+  if (CurrentWeapon) {
+    CurrentWeapon->SetAiming(true);
+  }
+
+  if (!bEnableScopeFov) {
+    return;
+  }
+
+  if (!CachedCameraComponent) {
+    CachedCameraComponent = ResolveCameraComponent();
+  }
+  if (!CachedCameraComponent) {
+    return;
+  }
+
+  if (DefaultFieldOfView <= KINDA_SMALL_NUMBER) {
+    DefaultFieldOfView = CachedCameraComponent->FieldOfView;
+  }
+
+  CachedCameraComponent->SetFieldOfView(ScopedFieldOfView);
+}
+
+void UCombatComponent::StopScope() {
+  bIsScoping = false;
+
+  if (CurrentWeapon) {
+    CurrentWeapon->SetAiming(false);
+  }
+
+  if (!bEnableScopeFov) {
+    return;
+  }
+
+  if (!CachedCameraComponent) {
+    CachedCameraComponent = ResolveCameraComponent();
+  }
+  if (!CachedCameraComponent) {
+    return;
+  }
+
+  if (DefaultFieldOfView > KINDA_SMALL_NUMBER) {
+    CachedCameraComponent->SetFieldOfView(DefaultFieldOfView);
+  }
+}
+
 void UCombatComponent::CacheOwnerReferences() {
   OwningCharacter = Cast<ACharacter>(GetOwner());
+  CachedCameraComponent = ResolveCameraComponent();
   CachedInteractionComponent = ResolveInteractionComponent();
   CachedAttachMesh = ResolveAttachMesh();
+
+  if (CachedCameraComponent && DefaultFieldOfView <= KINDA_SMALL_NUMBER) {
+    DefaultFieldOfView = CachedCameraComponent->FieldOfView;
+  }
+}
+
+UCameraComponent *UCombatComponent::ResolveCameraComponent() const {
+  return OwningCharacter ? OwningCharacter->FindComponentByClass<UCameraComponent>()
+                         : nullptr;
 }
 
 UInteractionComponent *UCombatComponent::ResolveInteractionComponent() const {
