@@ -7,6 +7,7 @@
 
 class APawn;
 class UCombatComponent;
+class UCurrencyComponent;
 class UHealthComponent;
 
 /**
@@ -44,10 +45,17 @@ public:
   UFUNCTION(BlueprintPure, Category = "HUD|Crosshair")
   bool ShouldShowCrosshair() const;
 
+  UFUNCTION(BlueprintPure, Category = "HUD|Money")
+  int32 GetMoney() const;
+
+  UFUNCTION(BlueprintPure, Category = "HUD|Money")
+  int32 GetCurrency() const { return GetMoney(); }
+
 private:
   void RefreshCachedComponents() const;
 
   UCombatComponent *ResolveCombatComponent() const;
+  UCurrencyComponent *ResolveCurrencyComponent() const;
   UHealthComponent *ResolveHealthComponent() const;
 
   UPROPERTY(Transient)
@@ -55,6 +63,9 @@ private:
 
   UPROPERTY(Transient)
   mutable TWeakObjectPtr<UCombatComponent> CachedCombatComponent;
+
+  UPROPERTY(Transient)
+  mutable TWeakObjectPtr<UCurrencyComponent> CachedCurrencyComponent;
 
   UPROPERTY(Transient)
   mutable TWeakObjectPtr<UHealthComponent> CachedHealthComponent;

@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/HUD/CrosshairWidgetBase.h"
+#include "Character/CurrencyComponent.h"
 #include "Character/HealthComponent.h"
 #include "Combat/CombatComponent.h"
 #include "GameFramework/Pawn.h"
@@ -70,11 +71,20 @@ bool UCrosshairWidgetBase::ShouldShowCrosshair() const {
   return CombatComp->GetCurrentWeapon() != nullptr && !CombatComp->IsScoping();
 }
 
+int32 UCrosshairWidgetBase::GetMoney() const {
+  if (const UCurrencyComponent *CurrencyComp = ResolveCurrencyComponent()) {
+    return CurrencyComp->GetCurrency();
+  }
+
+  return 0;
+}
+
 void UCrosshairWidgetBase::RefreshCachedComponents() const {
   APawn *OwningPawn = GetOwningPlayerPawn();
   if (!OwningPawn) {
     CachedOwningPawn.Reset();
     CachedCombatComponent.Reset();
+    CachedCurrencyComponent.Reset();
     CachedHealthComponent.Reset();
     return;
   }
@@ -82,12 +92,18 @@ void UCrosshairWidgetBase::RefreshCachedComponents() const {
   if (CachedOwningPawn.Get() != OwningPawn) {
     CachedOwningPawn = OwningPawn;
     CachedCombatComponent = OwningPawn->FindComponentByClass<UCombatComponent>();
+    CachedCurrencyComponent =
+        OwningPawn->FindComponentByClass<UCurrencyComponent>();
     CachedHealthComponent = OwningPawn->FindComponentByClass<UHealthComponent>();
     return;
   }
 
   if (!CachedCombatComponent.IsValid()) {
     CachedCombatComponent = OwningPawn->FindComponentByClass<UCombatComponent>();
+  }
+
+  if (!CachedCurrencyComponent.IsValid()) {
+    CachedCurrencyComponent = OwningPawn->FindComponentByClass<UCurrencyComponent>();
   }
 
   if (!CachedHealthComponent.IsValid()) {
@@ -99,6 +115,12 @@ UCombatComponent *UCrosshairWidgetBase::ResolveCombatComponent() const {
   RefreshCachedComponents();
 
   return CachedCombatComponent.Get();
+}
+
+UCurrencyComponent *UCrosshairWidgetBase::ResolveCurrencyComponent() const {
+  RefreshCachedComponents();
+
+  return CachedCurrencyComponent.Get();
 }
 
 UHealthComponent *UCrosshairWidgetBase::ResolveHealthComponent() const {

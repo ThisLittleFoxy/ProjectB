@@ -1,7 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Character/HealthComponent.h"
+#include "Character/CurrencyComponent.h"
+#include "Engine/Engine.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Controller.h"
 #include "Math/UnrealMathUtility.h"
 #include "Project.h"
 
@@ -70,11 +73,58 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(AActor *DamagedActor, float Dama
     return;
   }
 
+  const bool bWasAliveBeforeDamage = IsAlive();
   const float AppliedDamage = ApplyDamage(Damage);
   if (AppliedDamage > 0.0f) {
     UE_LOG(LogProject, Verbose,
            TEXT("HealthComponent: '%s' took %.2f damage (%.2f / %.2f)"),
            *GetNameSafe(DamagedActor), AppliedDamage, CurrentHealth, MaxHealth);
+
+    if (bShowDamageOnScreen && GEngine) {
+      const FString ScreenMessage = FString::Printf(
+          TEXT("%s: -%.1f HP (%.1f / %.1f)"), *GetNameSafe(DamagedActor),
+          AppliedDamage, CurrentHealth, MaxHealth);
+      GEngine->AddOnScreenDebugMessage(
+          -1, FMath::Max(0.0f, DamageScreenMessageDuration),
+          DamageScreenMessageColor, ScreenMessage);
+    }
+
+    if (bWasAliveBeforeDamage && !IsAlive()) {
+      GrantDeathCurrencyReward(InstigatedBy, DamageCauser);
+    }
+  }
+}
+
+void UHealthComponent::GrantDeathCurrencyReward(AController *InstigatedBy,
+                                                AActor *DamageCauser) {
+  if (!bGrantCurrencyOnDeath || CurrencyRewardOnDeath <= 0) {
+    return;
+  }
+
+  AActor *RewardReceiver = nullptr;
+  if (InstigatedBy) {
+    RewardReceiver = InstigatedBy->GetPawn();
+  }
+
+  if (!RewardReceiver && DamageCauser) {
+    RewardReceiver = DamageCauser->GetInstigator();
+  }
+
+  AActor *OwnerActor = GetOwner();
+  if (!RewardReceiver || RewardReceiver == OwnerActor) {
+    return;
+  }
+
+  UCurrencyComponent *CurrencyComponent =
+      RewardReceiver->FindComponentByClass<UCurrencyComponent>();
+  if (!CurrencyComponent) {
+    return;
+  }
+
+  const int32 AddedCurrency = CurrencyComponent->AddCurrency(CurrencyRewardOnDeath);
+  if (AddedCurrency > 0) {
+    UE_LOG(LogProject, Log, TEXT("HealthComponent: '%s' granted +%d currency to '%s'"),
+           *GetNameSafe(OwnerActor), AddedCurrency, *GetNameSafe(RewardReceiver));
   }
 }
 

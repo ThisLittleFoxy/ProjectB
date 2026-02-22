@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
+#include "Math/Color.h"
 #include "HealthComponent.generated.h"
 
 class AActor;
@@ -96,6 +97,26 @@ protected:
             meta = (ClampMin = "0.0", EditCondition = "bDestroyOwnerOnDeath"))
   float DestroyDelayOnDeath = 0.0f;
 
+  /** If true, instigator receives currency reward when this actor dies */
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Rewards")
+  bool bGrantCurrencyOnDeath = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Rewards",
+            meta = (ClampMin = "0", EditCondition = "bGrantCurrencyOnDeath"))
+  int32 CurrencyRewardOnDeath = 10;
+
+  /** Show incoming damage on screen (debug) */
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Debug")
+  bool bShowDamageOnScreen = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Debug",
+            meta = (ClampMin = "0.0", EditCondition = "bShowDamageOnScreen"))
+  float DamageScreenMessageDuration = 1.5f;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Debug",
+            meta = (EditCondition = "bShowDamageOnScreen"))
+  FColor DamageScreenMessageColor = FColor::Red;
+
 private:
   UFUNCTION()
   void HandleOwnerTakeAnyDamage(AActor *DamagedActor, float Damage,
@@ -104,6 +125,7 @@ private:
                                 AActor *DamageCauser);
 
   void HandleDeath();
+  void GrantDeathCurrencyReward(AController *InstigatedBy, AActor *DamageCauser);
 
   float SetHealth(float NewHealth);
 

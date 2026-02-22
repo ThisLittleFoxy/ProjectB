@@ -1,8 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Combat/WeaponBase.h"
+#include "Combat/HitZoneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/DamageType.h"
@@ -257,9 +259,27 @@ bool AWeaponBase::FireOnce() {
   if (bHit) {
     if (AActor *HitActor = HitResult.GetActor()) {
       const FVector ShotDirection = (TraceEnd - TraceStart).GetSafeNormal();
-      UGameplayStatics::ApplyPointDamage(HitActor, Damage, ShotDirection,
+      float FinalDamage = Damage;
+      bool bHitZoneTarget = false;
+      if (const UHitZoneComponent *HitZoneComponent =
+              HitActor->FindComponentByClass<UHitZoneComponent>()) {
+        bHitZoneTarget = true;
+        FinalDamage *= HitZoneComponent->ResolveDamageMultiplier(HitResult);
+      }
+
+      UGameplayStatics::ApplyPointDamage(HitActor, FinalDamage, ShotDirection,
                                          HitResult, GetOwningController(), this,
                                          UDamageType::StaticClass());
+
+      if (bHitZoneTarget && GEngine && FinalDamage > 0.0f) {
+        const FString HitBoneName = HitResult.BoneName.IsNone()
+                                        ? TEXT("none")
+                                        : HitResult.BoneName.ToString();
+        const FString Message = FString::Printf(
+            TEXT("%s received %.1f damage (bone: %s)"), *GetNameSafe(HitActor),
+            FinalDamage, *HitBoneName);
+        GEngine->AddOnScreenDebugMessage(-1, 1.2f, FColor::Red, Message);
+      }
     }
 
     if (ImpactEffect) {
