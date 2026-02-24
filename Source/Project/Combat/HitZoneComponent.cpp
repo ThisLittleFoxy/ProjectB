@@ -24,19 +24,10 @@ EHitZone UHitZoneComponent::ResolveHitZone(const FHitResult &Hit) const {
 }
 
 float UHitZoneComponent::ResolveDamageMultiplier(const FHitResult &Hit) const {
-  const FName HitBoneName = Hit.BoneName;
-  if (HitBoneName.IsNone()) {
-    return DefaultDamageMultiplier;
-  }
-
-  for (const FHitZoneRule &Rule : ZoneRules) {
-    if (Rule.BoneNames.Contains(HitBoneName)) {
-      return FMath::Max(0.0f, Rule.DamageMultiplier);
-    }
-  }
-
+  (void)Hit;
   UE_LOG(LogProject, Verbose,
-         TEXT("HitZoneComponent: using default multiplier for bone '%s' on '%s'"),
-         *HitBoneName.ToString(), *GetNameSafe(GetOwner()));
-  return DefaultDamageMultiplier;
+         TEXT("HitZoneComponent::ResolveDamageMultiplier is deprecated on '%s'. "
+              "Use ResolveHitZone plus per-weapon multipliers."),
+         *GetNameSafe(GetOwner()));
+  return 1.0f;
 }

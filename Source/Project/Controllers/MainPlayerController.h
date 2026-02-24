@@ -138,6 +138,16 @@ protected:
   UFUNCTION()
   void HandleScopeCompleted(const FInputActionValue &Value);
 
+  /** Weapon cycle input (mouse wheel axis or equivalent) */
+  UFUNCTION()
+  void HandleWeaponCycle(const FInputActionValue &Value);
+
+  UPROPERTY(EditAnywhere, Category = "Input|Combat", meta = (ClampMin = "0.0"))
+  float WeaponCycleInputCooldown = 0.12f;
+
+  UPROPERTY(Transient)
+  float LastWeaponCycleInputTimeSeconds = -1000.0f;
+
 public:
   /** Show/hide mouse cursor and set appropriate input mode */
   UFUNCTION(BlueprintCallable, Category = "UI")

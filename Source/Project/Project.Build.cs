@@ -9,32 +9,34 @@ public class Project : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
         PublicDependencyModuleNames.AddRange(new string[]
-        { 
-            // ========== ������� ������ ==========
-            "Core",                     // �������� ������ UE
-            "CoreUObject",              // UObject �������
-            "Engine",                   // ������� ������
-            "InputCore",                // ������� ����
-            
-            // ========== Enhanced Input ==========
-            "EnhancedInput",            // ����������� ������� �����
-            
-            // ========== UI ������ ==========
-            "UMG",                      // User Widget (UI Blueprint)
-            "Slate",                    // UI Framework
-            "SlateCore",                // UI Core
-            
-            // ========== AI � ��������� ==========
-            "AIModule",                 // AI ������� (�����������, ���������)
-            "NavigationSystem",         // Navmesh, pathfinding
-            
-            // ========== ������ ==========
-            "PhysicsCore"               // ���������� �������
+        {
+            // Core
+            "Core",
+            "CoreUObject",
+            "Engine",
+            "InputCore",
+
+            // Input
+            "EnhancedInput",
+
+            // Gameplay systems
+            "GameplayTags",
+
+            // UI
+            "UMG",
+            "Slate",
+            "SlateCore",
+
+            // AI and navigation
+            "AIModule",
+            "NavigationSystem",
+
+            // Physics
+            "PhysicsCore"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
-        { 
-            // ��������� ����������� (���� ����������� � �������)
+        {
         });
 
         PrivateIncludePaths.AddRange(
@@ -47,6 +49,7 @@ public class Project : ModuleRules
         // Uncomment if you are using online features
         // PrivateDependencyModuleNames.Add("OnlineSubsystem");
 
-        // To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+        // To include OnlineSubsystemSteam, add it to the plugins section in your
+        // uproject file with the Enabled attribute set to true.
     }
 }

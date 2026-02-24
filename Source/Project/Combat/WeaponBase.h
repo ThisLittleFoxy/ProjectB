@@ -2,8 +2,10 @@
 
 #pragma once
 
+#include "Combat/HitZoneComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 #include "WeaponBase.generated.h"
 
 class APawn;
@@ -12,6 +14,7 @@ class APlayerController;
 class USkeletalMeshComponent;
 class UParticleSystem;
 class USoundBase;
+class UTexture2D;
 
 UENUM(BlueprintType)
 enum class EWeaponFireMode : uint8 {
@@ -74,6 +77,18 @@ public:
   UFUNCTION(BlueprintPure, Category = "Weapon|Aim")
   bool IsAiming() const { return bIsAiming; }
 
+  UFUNCTION(BlueprintPure, Category = "Weapon|Identity")
+  FGameplayTag GetWeaponTypeTag() const { return WeaponTypeTag; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Loadout")
+  FName GetAttachSocketNameOverride() const { return AttachSocketNameOverride; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|UI")
+  UTexture2D *GetWeaponIcon() const { return WeaponIcon; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Damage")
+  float GetDamageMultiplierForZone(EHitZone Zone) const;
+
   /** Called after each successful shot recoil calculation (for BP visual effects) */
   UFUNCTION(BlueprintImplementableEvent, Category = "Weapon|Recoil")
   void BP_OnRecoilApplied(float RecoilYawDeg, float RecoilPitchDeg);
@@ -95,6 +110,22 @@ protected:
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Fire",
             meta = (ClampMin = "0.0"))
   float Damage = 20.0f;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Identity")
+  FGameplayTag WeaponTypeTag;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Loadout")
+  FName AttachSocketNameOverride = NAME_None;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|UI")
+  TObjectPtr<UTexture2D> WeaponIcon;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Damage")
+  TMap<EHitZone, float> DamageMultiplierByZone;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Damage",
+            meta = (ClampMin = "0.0"))
+  float DefaultZoneDamageMultiplier = 1.0f;
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Fire",
             meta = (ClampMin = "100.0"))

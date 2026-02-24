@@ -24,8 +24,9 @@ struct FHitZoneRule {
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone")
   TArray<FName> BoneNames;
 
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone",
-            meta = (ClampMin = "0.0"))
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone|Deprecated",
+            meta = (ClampMin = "0.0", DeprecatedProperty,
+                    DeprecationMessage = "Damage multipliers are now defined per weapon"))
   float DamageMultiplier = 1.0f;
 };
 
@@ -39,14 +40,17 @@ public:
   UFUNCTION(BlueprintPure, Category = "HitZone")
   EHitZone ResolveHitZone(const FHitResult &Hit) const;
 
-  UFUNCTION(BlueprintPure, Category = "HitZone")
+  UFUNCTION(BlueprintPure, Category = "HitZone",
+            meta = (DeprecatedFunction,
+                    DeprecationMessage = "Use ResolveHitZone and per-weapon zone multipliers"))
   float ResolveDamageMultiplier(const FHitResult &Hit) const;
 
 protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone")
   TArray<FHitZoneRule> ZoneRules;
 
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone",
-            meta = (ClampMin = "0.0"))
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HitZone|Deprecated",
+            meta = (ClampMin = "0.0", DeprecatedProperty,
+                    DeprecationMessage = "Damage multipliers are now defined per weapon"))
   float DefaultDamageMultiplier = 1.0f;
 };

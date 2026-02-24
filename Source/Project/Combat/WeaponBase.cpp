@@ -18,6 +18,21 @@
 #include "TimerManager.h"
 #include "Utils/AimTraceService.h"
 
+namespace {
+const TCHAR *GetHitZoneDebugName(EHitZone HitZone) {
+  switch (HitZone) {
+  case EHitZone::Head:
+    return TEXT("Head");
+  case EHitZone::Torso:
+    return TEXT("Torso");
+  case EHitZone::Limb:
+    return TEXT("Limb");
+  default:
+    return TEXT("Unknown");
+  }
+}
+} // namespace
+
 AWeaponBase::AWeaponBase() {
   PrimaryActorTick.bCanEverTick = true;
   PrimaryActorTick.bStartWithTickEnabled = false;
@@ -200,6 +215,14 @@ bool AWeaponBase::CanFire() const {
 
 void AWeaponBase::SetAiming(bool bNewAiming) { bIsAiming = bNewAiming; }
 
+float AWeaponBase::GetDamageMultiplierForZone(EHitZone Zone) const {
+  if (const float *FoundMultiplier = DamageMultiplierByZone.Find(Zone)) {
+    return FMath::Max(0.0f, *FoundMultiplier);
+  }
+
+  return FMath::Max(0.0f, DefaultZoneDamageMultiplier);
+}
+
 void AWeaponBase::StartFire() {
   bIsTriggerHeld = true;
 
@@ -259,25 +282,30 @@ bool AWeaponBase::FireOnce() {
   if (bHit) {
     if (AActor *HitActor = HitResult.GetActor()) {
       const FVector ShotDirection = (TraceEnd - TraceStart).GetSafeNormal();
-      float FinalDamage = Damage;
-      bool bHitZoneTarget = false;
+      EHitZone HitZone = EHitZone::Unknown;
+      bool bHasHitZoneComponent = false;
       if (const UHitZoneComponent *HitZoneComponent =
               HitActor->FindComponentByClass<UHitZoneComponent>()) {
-        bHitZoneTarget = true;
-        FinalDamage *= HitZoneComponent->ResolveDamageMultiplier(HitResult);
+        bHasHitZoneComponent = true;
+        HitZone = HitZoneComponent->ResolveHitZone(HitResult);
       }
+      const float ZoneDamageMultiplier = GetDamageMultiplierForZone(HitZone);
+      const float FinalDamage = Damage * ZoneDamageMultiplier;
 
       UGameplayStatics::ApplyPointDamage(HitActor, FinalDamage, ShotDirection,
                                          HitResult, GetOwningController(), this,
                                          UDamageType::StaticClass());
 
-      if (bHitZoneTarget && GEngine && FinalDamage > 0.0f) {
+      if (bHasHitZoneComponent && GEngine && FinalDamage > 0.0f) {
         const FString HitBoneName = HitResult.BoneName.IsNone()
                                         ? TEXT("none")
                                         : HitResult.BoneName.ToString();
+        const FString WeaponTypeTagString =
+            WeaponTypeTag.IsValid() ? WeaponTypeTag.ToString() : TEXT("None");
         const FString Message = FString::Printf(
-            TEXT("%s received %.1f damage (bone: %s)"), *GetNameSafe(HitActor),
-            FinalDamage, *HitBoneName);
+            TEXT("%s received %.1f damage [weapon=%s, zone=%s, x%.2f, bone=%s]"),
+            *GetNameSafe(HitActor), FinalDamage, *WeaponTypeTagString,
+            GetHitZoneDebugName(HitZone), ZoneDamageMultiplier, *HitBoneName);
         GEngine->AddOnScreenDebugMessage(-1, 1.2f, FColor::Red, Message);
       }
     }

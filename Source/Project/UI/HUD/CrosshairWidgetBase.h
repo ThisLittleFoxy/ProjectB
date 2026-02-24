@@ -3,12 +3,14 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "GameplayTagContainer.h"
 #include "CrosshairWidgetBase.generated.h"
 
 class APawn;
 class UCombatComponent;
 class UCurrencyComponent;
 class UHealthComponent;
+class UTexture2D;
 
 /**
  * Base widget for player HUD.
@@ -45,11 +47,21 @@ public:
   UFUNCTION(BlueprintPure, Category = "HUD|Crosshair")
   bool ShouldShowCrosshair() const;
 
+  /** True when ADS is active with scope-tag weapon (e.g. sniper) */
+  UFUNCTION(BlueprintPure, Category = "HUD|Crosshair")
+  bool ShouldShowSniperScopeOverlay() const;
+
   UFUNCTION(BlueprintPure, Category = "HUD|Money")
   int32 GetMoney() const;
 
   UFUNCTION(BlueprintPure, Category = "HUD|Money")
   int32 GetCurrency() const { return GetMoney(); }
+
+  UFUNCTION(BlueprintPure, Category = "HUD|Weapon")
+  UTexture2D *GetCurrentWeaponIcon() const;
+
+  UFUNCTION(BlueprintPure, Category = "HUD|Weapon")
+  FGameplayTag GetCurrentWeaponTypeTag() const;
 
 private:
   void RefreshCachedComponents() const;

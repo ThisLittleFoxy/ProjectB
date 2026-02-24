@@ -71,12 +71,36 @@ bool UCrosshairWidgetBase::ShouldShowCrosshair() const {
   return CombatComp->GetCurrentWeapon() != nullptr && !CombatComp->IsScoping();
 }
 
+bool UCrosshairWidgetBase::ShouldShowSniperScopeOverlay() const {
+  if (const UCombatComponent *CombatComp = ResolveCombatComponent()) {
+    return CombatComp->IsScopeOverlayActive();
+  }
+
+  return false;
+}
+
 int32 UCrosshairWidgetBase::GetMoney() const {
   if (const UCurrencyComponent *CurrencyComp = ResolveCurrencyComponent()) {
     return CurrencyComp->GetCurrency();
   }
 
   return 0;
+}
+
+UTexture2D *UCrosshairWidgetBase::GetCurrentWeaponIcon() const {
+  if (const UCombatComponent *CombatComp = ResolveCombatComponent()) {
+    return CombatComp->GetCurrentWeaponIcon();
+  }
+
+  return nullptr;
+}
+
+FGameplayTag UCrosshairWidgetBase::GetCurrentWeaponTypeTag() const {
+  if (const UCombatComponent *CombatComp = ResolveCombatComponent()) {
+    return CombatComp->GetCurrentWeaponTypeTag();
+  }
+
+  return FGameplayTag();
 }
 
 void UCrosshairWidgetBase::RefreshCachedComponents() const {

@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameplayTagsManager.h"
 #include "Interaction/InteractionComponent.h"
 #include "Project.h"
 #include "UObject/UnrealType.h"
@@ -67,20 +68,167 @@ void CopyFirstPersonRenderSettings(USkeletalMeshComponent *SourceMesh,
 
 UCombatComponent::UCombatComponent() {
   PrimaryComponentTick.bCanEverTick = false;
+  ScopeOverlayWeaponTypeTag =
+      FGameplayTag::RequestGameplayTag(TEXT("Weapon.Type.Sniper"), false);
 }
 
 void UCombatComponent::BeginPlay() {
   Super::BeginPlay();
 
+  if (!ScopeOverlayWeaponTypeTag.IsValid()) {
+    ScopeOverlayWeaponTypeTag =
+        FGameplayTag::RequestGameplayTag(TEXT("Weapon.Type.Sniper"), false);
+  }
+
   CacheOwnerReferences();
 
-  if (bSpawnStarterWeaponOnBeginPlay && StarterWeaponClass && !CurrentWeapon) {
-    if (!EquipWeapon(StarterWeaponClass)) {
+  if (bSpawnStarterWeaponOnBeginPlay && !CurrentWeapon) {
+    if (!InitializeLoadout()) {
       UE_LOG(LogProject, Warning,
-             TEXT("CombatComponent: failed to spawn starter weapon on '%s'"),
+             TEXT("CombatComponent: failed to initialize loadout on '%s'"),
              *GetNameSafe(GetOwner()));
     }
   }
+}
+
+bool UCombatComponent::InitializeLoadout() {
+  if (!OwningCharacter) {
+    CacheOwnerReferences();
+    if (!OwningCharacter) {
+      UE_LOG(LogProject, Error,
+             TEXT("CombatComponent: owner is not a Character"));
+      return false;
+    }
+  }
+
+  UWorld *World = GetWorld();
+  if (!World) {
+    return false;
+  }
+
+  StopScope();
+  DestroyAllLoadoutWeapons();
+
+  TArray<TSubclassOf<AWeaponBase>> EffectiveLoadoutClasses;
+  for (const TSubclassOf<AWeaponBase> WeaponClass : LoadoutWeaponClasses) {
+    if (WeaponClass) {
+      EffectiveLoadoutClasses.Add(WeaponClass);
+    }
+  }
+
+  if (EffectiveLoadoutClasses.Num() == 0 && StarterWeaponClass) {
+    EffectiveLoadoutClasses.Add(StarterWeaponClass);
+  }
+
+  if (EffectiveLoadoutClasses.Num() == 0) {
+    UE_LOG(LogProject, Warning,
+           TEXT("CombatComponent: no loadout classes configured on '%s'"),
+           *GetNameSafe(GetOwner()));
+    CurrentWeapon = nullptr;
+    CurrentWeaponSlotIndex = INDEX_NONE;
+    return false;
+  }
+
+  FActorSpawnParameters SpawnParams;
+  SpawnParams.Owner = OwningCharacter;
+  SpawnParams.Instigator = OwningCharacter;
+  SpawnParams.SpawnCollisionHandlingOverride =
+      ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+  SpawnedLoadoutWeapons.Reserve(EffectiveLoadoutClasses.Num());
+
+  for (const TSubclassOf<AWeaponBase> WeaponClass : EffectiveLoadoutClasses) {
+    AWeaponBase *SpawnedWeapon = World->SpawnActor<AWeaponBase>(
+        WeaponClass, OwningCharacter->GetActorTransform(), SpawnParams);
+    if (!IsValid(SpawnedWeapon)) {
+      UE_LOG(LogProject, Warning,
+             TEXT("CombatComponent: failed to spawn loadout weapon '%s' on '%s'"),
+             *GetNameSafe(WeaponClass.Get()), *GetNameSafe(GetOwner()));
+      continue;
+    }
+
+    SpawnedWeapon->SetOwningPawn(OwningCharacter);
+    AttachWeaponToOwner(SpawnedWeapon);
+    SetWeaponActiveState(SpawnedWeapon, false);
+    SpawnedLoadoutWeapons.Add(SpawnedWeapon);
+  }
+
+  if (SpawnedLoadoutWeapons.Num() == 0) {
+    UE_LOG(LogProject, Warning,
+           TEXT("CombatComponent: loadout spawn produced no valid weapons on '%s'"),
+           *GetNameSafe(GetOwner()));
+    return false;
+  }
+
+  const int32 EquippedSlot =
+      FMath::Clamp(InitialEquippedSlotIndex, 0, SpawnedLoadoutWeapons.Num() - 1);
+  return EquipWeaponSlot(EquippedSlot);
+}
+
+bool UCombatComponent::EquipWeaponSlot(int32 SlotIndex) {
+  if (!SpawnedLoadoutWeapons.IsValidIndex(SlotIndex)) {
+    return false;
+  }
+
+  AWeaponBase *NewWeapon = SpawnedLoadoutWeapons[SlotIndex];
+  if (!IsValid(NewWeapon)) {
+    return false;
+  }
+
+  if (!OwningCharacter) {
+    CacheOwnerReferences();
+    if (!OwningCharacter) {
+      return false;
+    }
+  }
+
+  if (CurrentWeapon == NewWeapon && CurrentWeaponSlotIndex == SlotIndex) {
+    SetWeaponActiveState(CurrentWeapon, true);
+    return true;
+  }
+
+  if (bIsScoping) {
+    StopScope();
+  }
+
+  AWeaponBase *PreviousWeapon = CurrentWeapon;
+  if (IsValid(PreviousWeapon) && PreviousWeapon != NewWeapon) {
+    SetWeaponActiveState(PreviousWeapon, false);
+  }
+
+  CurrentWeapon = NewWeapon;
+  CurrentWeaponSlotIndex = SlotIndex;
+  CurrentWeapon->SetOwningPawn(OwningCharacter);
+  AttachWeaponToOwner(CurrentWeapon);
+  SetWeaponActiveState(CurrentWeapon, true);
+
+  BroadcastCurrentWeaponChanged(PreviousWeapon, CurrentWeapon,
+                                CurrentWeaponSlotIndex);
+  return true;
+}
+
+bool UCombatComponent::EquipNextWeapon() {
+  const int32 WeaponCount = SpawnedLoadoutWeapons.Num();
+  if (WeaponCount <= 1) {
+    return false;
+  }
+
+  const int32 BaseIndex = CurrentWeaponSlotIndex == INDEX_NONE ? 0
+                                                                : CurrentWeaponSlotIndex;
+  const int32 NextIndex = (BaseIndex + 1) % WeaponCount;
+  return EquipWeaponSlot(NextIndex);
+}
+
+bool UCombatComponent::EquipPreviousWeapon() {
+  const int32 WeaponCount = SpawnedLoadoutWeapons.Num();
+  if (WeaponCount <= 1) {
+    return false;
+  }
+
+  const int32 BaseIndex = CurrentWeaponSlotIndex == INDEX_NONE ? 0
+                                                                : CurrentWeaponSlotIndex;
+  const int32 PreviousIndex = (BaseIndex - 1 + WeaponCount) % WeaponCount;
+  return EquipWeaponSlot(PreviousIndex);
 }
 
 bool UCombatComponent::EquipWeapon(TSubclassOf<AWeaponBase> WeaponClass) {
@@ -128,43 +276,29 @@ bool UCombatComponent::EquipSpawnedWeapon(AWeaponBase *NewWeapon) {
     return false;
   }
 
-  if (CurrentWeapon == NewWeapon) {
+  if (CurrentWeapon == NewWeapon && CurrentWeaponSlotIndex != INDEX_NONE) {
     return true;
   }
 
-  UnequipCurrentWeapon(true);
-  CurrentWeapon = NewWeapon;
-  CurrentWeapon->SetOwningPawn(OwningCharacter);
-
-  CachedAttachMesh = ResolveAttachMesh();
-
-  if (CachedAttachMesh) {
-    const bool bHasSocket = CachedAttachMesh->DoesSocketExist(WeaponAttachSocketName);
-    UE_LOG(
-        LogProject, Log,
-        TEXT("CombatComponent: attaching weapon '%s' to mesh '%s' socket '%s' (exists=%s)"),
-        *GetNameSafe(CurrentWeapon), *GetNameSafe(CachedAttachMesh),
-        *WeaponAttachSocketName.ToString(), bHasSocket ? TEXT("true") : TEXT("false"));
-
-    CurrentWeapon->AttachToComponent(
-        CachedAttachMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-        WeaponAttachSocketName);
-
-    if (USceneComponent *WeaponRoot = CurrentWeapon->GetRootComponent()) {
-      WeaponRoot->SetUsingAbsoluteLocation(false);
-      WeaponRoot->SetUsingAbsoluteRotation(false);
-      WeaponRoot->SetUsingAbsoluteScale(false);
-    }
-
-    if (USkeletalMeshComponent *WeaponMesh = CurrentWeapon->GetWeaponMesh()) {
-      CopyFirstPersonRenderSettings(CachedAttachMesh, WeaponMesh);
-    }
-  } else if (USceneComponent *Root = OwningCharacter->GetRootComponent()) {
-    CurrentWeapon->AttachToComponent(
-        Root, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+  if (bIsScoping) {
+    StopScope();
   }
 
-  return true;
+  for (AWeaponBase *ExistingWeapon : SpawnedLoadoutWeapons) {
+    if (IsValid(ExistingWeapon) && ExistingWeapon != NewWeapon) {
+      ExistingWeapon->Destroy();
+    }
+  }
+  SpawnedLoadoutWeapons.Reset();
+
+  NewWeapon->SetOwningPawn(OwningCharacter);
+  AttachWeaponToOwner(NewWeapon);
+  SetWeaponActiveState(NewWeapon, false);
+  SpawnedLoadoutWeapons.Add(NewWeapon);
+
+  CurrentWeapon = nullptr;
+  CurrentWeaponSlotIndex = INDEX_NONE;
+  return EquipWeaponSlot(0);
 }
 
 void UCombatComponent::UnequipCurrentWeapon(bool bDestroyWeapon) {
@@ -173,16 +307,26 @@ void UCombatComponent::UnequipCurrentWeapon(bool bDestroyWeapon) {
   }
 
   StopScope();
-  CurrentWeapon->StopFire();
-  CurrentWeapon->SetAiming(false);
+
+  AWeaponBase *PreviousWeapon = CurrentWeapon;
+  PreviousWeapon->StopFire();
+  PreviousWeapon->SetAiming(false);
+
+  const int32 ExistingIndex = SpawnedLoadoutWeapons.IndexOfByKey(PreviousWeapon);
+  if (ExistingIndex != INDEX_NONE) {
+    SpawnedLoadoutWeapons.RemoveAt(ExistingIndex);
+  }
 
   if (bDestroyWeapon) {
-    CurrentWeapon->Destroy();
+    PreviousWeapon->Destroy();
   } else {
-    CurrentWeapon->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    PreviousWeapon->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    SetWeaponActiveState(PreviousWeapon, false);
   }
 
   CurrentWeapon = nullptr;
+  CurrentWeaponSlotIndex = INDEX_NONE;
+  BroadcastCurrentWeaponChanged(PreviousWeapon, nullptr, INDEX_NONE);
 }
 
 void UCombatComponent::StartFire() {
@@ -279,6 +423,118 @@ void UCombatComponent::StopScope() {
   if (DefaultFieldOfView > KINDA_SMALL_NUMBER) {
     CachedCameraComponent->SetFieldOfView(DefaultFieldOfView);
   }
+}
+
+bool UCombatComponent::IsCurrentWeaponScopeType() const {
+  if (!CurrentWeapon || !ScopeOverlayWeaponTypeTag.IsValid()) {
+    return false;
+  }
+
+  return CurrentWeapon->GetWeaponTypeTag().MatchesTagExact(
+      ScopeOverlayWeaponTypeTag);
+}
+
+bool UCombatComponent::IsScopeOverlayActive() const {
+  return bIsScoping && IsCurrentWeaponScopeType();
+}
+
+FGameplayTag UCombatComponent::GetCurrentWeaponTypeTag() const {
+  return CurrentWeapon ? CurrentWeapon->GetWeaponTypeTag() : FGameplayTag();
+}
+
+UTexture2D *UCombatComponent::GetCurrentWeaponIcon() const {
+  return CurrentWeapon ? CurrentWeapon->GetWeaponIcon() : nullptr;
+}
+
+void UCombatComponent::AttachWeaponToOwner(AWeaponBase *Weapon) {
+  if (!IsValid(Weapon) || !OwningCharacter) {
+    return;
+  }
+
+  CachedAttachMesh = ResolveAttachMesh();
+
+  if (CachedAttachMesh) {
+    const FName WeaponSocketOverride = Weapon->GetAttachSocketNameOverride();
+    FName AttachSocketName = WeaponAttachSocketName;
+    if (!WeaponSocketOverride.IsNone()) {
+      AttachSocketName = WeaponSocketOverride;
+    }
+
+    bool bHasSocket = CachedAttachMesh->DoesSocketExist(AttachSocketName);
+    if (!bHasSocket && AttachSocketName != WeaponAttachSocketName &&
+        CachedAttachMesh->DoesSocketExist(WeaponAttachSocketName)) {
+      UE_LOG(LogProject, Warning,
+             TEXT("CombatComponent: socket override '%s' not found on mesh '%s', "
+                  "falling back to default socket '%s'"),
+             *AttachSocketName.ToString(), *GetNameSafe(CachedAttachMesh),
+             *WeaponAttachSocketName.ToString());
+      AttachSocketName = WeaponAttachSocketName;
+      bHasSocket = true;
+    }
+
+    UE_LOG(LogProject, Log,
+           TEXT("CombatComponent: attaching weapon '%s' to mesh '%s' socket '%s' (exists=%s)"),
+           *GetNameSafe(Weapon), *GetNameSafe(CachedAttachMesh),
+           *AttachSocketName.ToString(), bHasSocket ? TEXT("true") : TEXT("false"));
+
+    Weapon->AttachToComponent(
+        CachedAttachMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+        AttachSocketName);
+
+    if (USceneComponent *WeaponRoot = Weapon->GetRootComponent()) {
+      WeaponRoot->SetUsingAbsoluteLocation(false);
+      WeaponRoot->SetUsingAbsoluteRotation(false);
+      WeaponRoot->SetUsingAbsoluteScale(false);
+    }
+
+    if (USkeletalMeshComponent *WeaponMesh = Weapon->GetWeaponMesh()) {
+      CopyFirstPersonRenderSettings(CachedAttachMesh, WeaponMesh);
+    }
+  } else if (USceneComponent *Root = OwningCharacter->GetRootComponent()) {
+    Weapon->AttachToComponent(Root,
+                              FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+  }
+}
+
+void UCombatComponent::SetWeaponActiveState(AWeaponBase *Weapon,
+                                            bool bShouldBeActive) {
+  if (!IsValid(Weapon)) {
+    return;
+  }
+
+  if (!bShouldBeActive) {
+    Weapon->StopFire();
+    Weapon->SetAiming(false);
+    Weapon->SetActorTickEnabled(false);
+  }
+
+  Weapon->SetActorHiddenInGame(!bShouldBeActive);
+  Weapon->SetActorEnableCollision(false);
+
+  if (USkeletalMeshComponent *WeaponMesh = Weapon->GetWeaponMesh()) {
+    WeaponMesh->SetVisibility(bShouldBeActive, true);
+  }
+}
+
+void UCombatComponent::BroadcastCurrentWeaponChanged(AWeaponBase *PreviousWeapon,
+                                                     AWeaponBase *NewWeapon,
+                                                     int32 NewSlotIndex) {
+  const FGameplayTag NewWeaponTypeTag =
+      IsValid(NewWeapon) ? NewWeapon->GetWeaponTypeTag() : FGameplayTag();
+  OnCurrentWeaponChanged.Broadcast(PreviousWeapon, NewWeapon, NewSlotIndex,
+                                   NewWeaponTypeTag);
+}
+
+void UCombatComponent::DestroyAllLoadoutWeapons() {
+  for (AWeaponBase *Weapon : SpawnedLoadoutWeapons) {
+    if (IsValid(Weapon)) {
+      Weapon->Destroy();
+    }
+  }
+
+  SpawnedLoadoutWeapons.Reset();
+  CurrentWeapon = nullptr;
+  CurrentWeaponSlotIndex = INDEX_NONE;
 }
 
 void UCombatComponent::CacheOwnerReferences() {

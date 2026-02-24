@@ -244,6 +244,15 @@ void AMainPlayerController::BindInputActions() {
         UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleReload"),
                *ActionName);
         BoundActions.Add(Action);
+      } else if (ActionName.Contains(TEXT("Scrol")) ||
+                 ActionName.Contains(TEXT("Scroll")) ||
+                 ActionName.Contains(TEXT("WeaponCycle"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Triggered, this,
+            &AMainPlayerController::HandleWeaponCycle);
+        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleWeaponCycle"),
+               *ActionName);
+        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Scope")) ||
                  ActionName.Contains(TEXT("IA_Scope")) ||
                  ActionName.Contains(TEXT("Aim"))) {
@@ -486,6 +495,37 @@ void AMainPlayerController::HandleScopeCompleted(
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StopScope();
     UE_LOG(LogProject, Log, TEXT("Scope stopped via CombatComponent"));
+  }
+}
+
+void AMainPlayerController::HandleWeaponCycle(const FInputActionValue &Value) {
+  APawn *ControlledPawn = GetPawn();
+  if (!ControlledPawn) {
+    return;
+  }
+
+  const float CycleValue = Value.Get<float>();
+  if (FMath::Abs(CycleValue) <= KINDA_SMALL_NUMBER) {
+    return;
+  }
+
+  const UWorld *World = GetWorld();
+  if (World) {
+    const float TimeSeconds = World->GetTimeSeconds();
+    if (TimeSeconds - LastWeaponCycleInputTimeSeconds <
+        FMath::Max(0.0f, WeaponCycleInputCooldown)) {
+      return;
+    }
+
+    LastWeaponCycleInputTimeSeconds = TimeSeconds;
+  }
+
+  if (UCombatComponent *CombatComp =
+          ControlledPawn->FindComponentByClass<UCombatComponent>()) {
+    const bool bSwitched = CycleValue > 0.0f ? CombatComp->EquipNextWeapon()
+                                             : CombatComp->EquipPreviousWeapon();
+    UE_LOG(LogProject, Log, TEXT("Weapon cycle (%.2f) switched: %s"), CycleValue,
+           bSwitched ? TEXT("true") : TEXT("false"));
   }
 }
 
