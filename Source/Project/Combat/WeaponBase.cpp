@@ -71,13 +71,17 @@ void AWeaponBase::BeginPlay() {
 
 void AWeaponBase::Tick(float DeltaSeconds) {
   Super::Tick(DeltaSeconds);
+  if (!UpdateCameraRecoilTick(DeltaSeconds)) {
+    SetActorTickEnabled(false);
+  }
+}
 
+bool AWeaponBase::UpdateCameraRecoilTick(float DeltaSeconds) {
   if (!bApplyCameraRecoil) {
     CameraRecoilTargetOffsetDeg = FVector2D::ZeroVector;
     CameraRecoilAppliedOffsetDeg = FVector2D::ZeroVector;
     bHasLastControlRotationBeforeRecoil = false;
-    SetActorTickEnabled(false);
-    return;
+    return false;
   }
 
   APlayerController *PlayerController = ResolveLocalPlayerController();
@@ -85,8 +89,7 @@ void AWeaponBase::Tick(float DeltaSeconds) {
     CameraRecoilTargetOffsetDeg = FVector2D::ZeroVector;
     CameraRecoilAppliedOffsetDeg = FVector2D::ZeroVector;
     bHasLastControlRotationBeforeRecoil = false;
-    SetActorTickEnabled(false);
-    return;
+    return false;
   }
 
   const FRotator CurrentControlRotation = PlayerController->GetControlRotation();
@@ -197,8 +200,10 @@ void AWeaponBase::Tick(float DeltaSeconds) {
     CameraRecoilTargetOffsetDeg = FVector2D::ZeroVector;
     CameraRecoilAppliedOffsetDeg = FVector2D::ZeroVector;
     bHasLastControlRotationBeforeRecoil = false;
-    SetActorTickEnabled(false);
+    return false;
   }
+
+  return true;
 }
 
 void AWeaponBase::SetOwningPawn(APawn *NewOwningPawn) {
@@ -213,7 +218,9 @@ bool AWeaponBase::CanFire() const {
   return bInfiniteAmmo || CurrentAmmoInMagazine > 0;
 }
 
-void AWeaponBase::SetAiming(bool bNewAiming) { bIsAiming = bNewAiming; }
+void AWeaponBase::SetAiming(bool bNewAiming) {
+  bIsAiming = bNewAiming;
+}
 
 float AWeaponBase::GetDamageMultiplierForZone(EHitZone Zone) const {
   if (const float *FoundMultiplier = DamageMultiplierByZone.Find(Zone)) {

@@ -30,6 +30,9 @@ public:
   int32 AddCurrency(int32 Amount);
 
   UFUNCTION(BlueprintCallable, Category = "Currency")
+  int32 SetCurrency(int32 NewCurrency);
+
+  UFUNCTION(BlueprintCallable, Category = "Currency")
   bool SpendCurrency(int32 Amount);
 
   UFUNCTION(BlueprintPure, Category = "Currency")

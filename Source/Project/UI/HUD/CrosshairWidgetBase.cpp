@@ -55,10 +55,6 @@ bool UCrosshairWidgetBase::IsAlive() const {
 }
 
 bool UCrosshairWidgetBase::IsScoping() const {
-  if (const UCombatComponent *CombatComp = ResolveCombatComponent()) {
-    return CombatComp->IsScoping();
-  }
-
   return false;
 }
 
@@ -68,14 +64,10 @@ bool UCrosshairWidgetBase::ShouldShowCrosshair() const {
     return false;
   }
 
-  return CombatComp->GetCurrentWeapon() != nullptr && !CombatComp->IsScoping();
+  return CombatComp->GetCurrentWeapon() != nullptr;
 }
 
 bool UCrosshairWidgetBase::ShouldShowSniperScopeOverlay() const {
-  if (const UCombatComponent *CombatComp = ResolveCombatComponent()) {
-    return CombatComp->IsScopeOverlayActive();
-  }
-
   return false;
 }
 

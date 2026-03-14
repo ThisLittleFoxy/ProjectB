@@ -21,6 +21,10 @@ class PROJECT_API UCrosshairWidgetBase : public UUserWidget {
   GENERATED_BODY()
 
 public:
+  UFUNCTION(BlueprintImplementableEvent, Category = "HUD",
+            meta = (DisplayName = "On Armory Overlay State Changed"))
+  void BP_OnArmoryOverlayStateChanged(bool bIsOverlayOpen);
+
   /** X: ammo in current magazine */
   UFUNCTION(BlueprintPure, Category = "HUD|Ammo")
   int32 GetAmmoMagazine() const;
@@ -47,7 +51,8 @@ public:
   UFUNCTION(BlueprintPure, Category = "HUD|Crosshair")
   bool ShouldShowCrosshair() const;
 
-  /** True when ADS is active with scope-tag weapon (e.g. sniper) */
+  // Legacy helper kept only so existing HUD Blueprints load.
+  // Always returns false until a new scoped HUD path is implemented.
   UFUNCTION(BlueprintPure, Category = "HUD|Crosshair")
   bool ShouldShowSniperScopeOverlay() const;
 

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Combat/WeaponLoadoutTypes.h"
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
@@ -18,12 +19,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
     FOnCurrentWeaponChanged, AWeaponBase *, PreviousWeapon, AWeaponBase *,
     NewWeapon, int32, NewSlotIndex, FGameplayTag, NewWeaponTypeTag);
 
-/**
- * Component-driven combat setup:
- * - spawns starter weapon
- * - keeps it attached to character mesh/socket
- * - routes Fire press/release to weapon (or widget interaction)
- */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class PROJECT_API UCombatComponent : public UActorComponent {
   GENERATED_BODY()
@@ -37,6 +32,9 @@ public:
   bool InitializeLoadout();
 
   UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+  void ClearLoadout();
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
   bool EquipWeaponSlot(int32 SlotIndex);
 
   UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
@@ -44,6 +42,25 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
   bool EquipPreviousWeapon();
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+  bool SetWeaponForSlot(EWeaponLoadoutSlot Slot,
+                        TSubclassOf<AWeaponBase> WeaponClass);
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+  void ClearWeaponSlot(EWeaponLoadoutSlot Slot);
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+  bool SetActiveLoadoutSlot(EWeaponLoadoutSlot Slot);
+
+  UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+  bool EquipActiveSlot();
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
+  AWeaponBase *GetWeaponInSlot(EWeaponLoadoutSlot Slot) const;
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
+  bool IsLoadoutSlotOccupied(EWeaponLoadoutSlot Slot) const;
 
   UFUNCTION(BlueprintCallable, Category = "Combat")
   bool EquipWeapon(TSubclassOf<AWeaponBase> WeaponClass);
@@ -69,7 +86,6 @@ public:
   UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
   int32 GetAmmoInReserve() const;
 
-  /** Current magazine + reserve ammo */
   UFUNCTION(BlueprintPure, Category = "Combat|Ammo")
   int32 GetAmmoTotalAvailable() const;
 
@@ -82,13 +98,18 @@ public:
   UFUNCTION(BlueprintPure, Category = "Combat|Aim")
   bool IsScoping() const { return bIsScoping; }
 
-  /** True when current weapon tag matches configured scope overlay tag */
+  // Legacy helper kept only so existing Blueprint assets load.
+  // Always returns false until a new scoped HUD path is implemented.
   UFUNCTION(BlueprintPure, Category = "Combat|Aim|Scope")
   bool IsCurrentWeaponScopeType() const;
 
-  /** True when ADS is active and current weapon is configured as scope type */
+  // Legacy helper kept only so existing Blueprint assets load.
+  // Always returns false until a new scoped HUD path is implemented.
   UFUNCTION(BlueprintPure, Category = "Combat|Aim|Scope")
   bool IsScopeOverlayActive() const;
+
+  UFUNCTION(BlueprintPure, Category = "Combat|Aim|Scope")
+  bool IsUsingPhysicalScope() const;
 
   UFUNCTION(BlueprintPure, Category = "Combat")
   AWeaponBase *GetCurrentWeapon() const { return CurrentWeapon; }
@@ -97,7 +118,7 @@ public:
   int32 GetCurrentWeaponSlotIndex() const { return CurrentWeaponSlotIndex; }
 
   UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
-  int32 GetLoadoutCount() const { return SpawnedLoadoutWeapons.Num(); }
+  int32 GetLoadoutCount() const;
 
   UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
   FGameplayTag GetCurrentWeaponTypeTag() const;
@@ -109,8 +130,6 @@ public:
   FOnCurrentWeaponChanged OnCurrentWeaponChanged;
 
 protected:
-  // ========== Setup ==========
-
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Loadout")
   TArray<TSubclassOf<AWeaponBase>> LoadoutWeaponClasses;
 
@@ -123,43 +142,35 @@ protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Loadout")
   bool bSpawnStarterWeaponOnBeginPlay = true;
 
-  /**
-   * Weapon attach point on selected skeletal mesh.
-   * If socket is missing, UE will attach to mesh root.
-   */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Loadout")
   FName WeaponAttachSocketName = TEXT("hand_r");
 
-  /**
-   * Try to find this mesh first (useful for first-person setup).
-   * Default name matches BP_Character component.
-   */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Loadout")
   FName PreferredFirstPersonMeshName = TEXT("FirstPersonMesh");
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Loadout")
   bool bPreferFirstPersonMesh = true;
 
-  // ========== Input ==========
-
-  /**
-   * If true, fire input clicks UMG widgets when crosshair hovers a widget.
-   * Gameplay shot is skipped for that press.
-   */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Input")
   bool bFireInteractsWithWidgets = true;
 
-  // ========== Aim / Scope ==========
-
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim")
   bool bEnableScopeFov = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim",
+            meta = (EditCondition = "bEnableScopeFov"))
+  bool bSmoothScopeFov = true;
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim",
             meta = (ClampMin = "1.0", ClampMax = "179.0",
                     EditCondition = "bEnableScopeFov"))
   float ScopedFieldOfView = 70.0f;
 
-  /** Weapon type tag that should enable scope overlay (PiP lens UI) */
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim",
+            meta = (ClampMin = "0.1", EditCondition = "bEnableScopeFov && bSmoothScopeFov"))
+  float ScopeFovInterpolationSpeed = 18.0f;
+
+  // Legacy property preserved for Blueprint compatibility. No longer used.
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Aim|Scope")
   FGameplayTag ScopeOverlayWeaponTypeTag;
 
@@ -199,6 +210,12 @@ private:
                                      AWeaponBase *NewWeapon, int32 NewSlotIndex);
   void DestroyAllLoadoutWeapons();
   void CacheOwnerReferences();
+  void EnsureLoadoutArraySize();
+  int32 CountOccupiedSlots() const;
+  int32 FindNextOccupiedSlotIndex(int32 StartSlotIndex, int32 Direction) const;
+  AWeaponBase *SpawnWeaponForSlot(int32 SlotIndex,
+                                  TSubclassOf<AWeaponBase> WeaponClass);
+  void UpdateCurrentWeaponAimState();
   UCameraComponent *ResolveCameraComponent() const;
   UInteractionComponent *ResolveInteractionComponent() const;
   USkeletalMeshComponent *ResolveAttachMesh() const;

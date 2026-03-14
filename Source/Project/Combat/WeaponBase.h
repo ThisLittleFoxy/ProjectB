@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Combat/HitZoneComponent.h"
+#include "Combat/WeaponLoadoutTypes.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
@@ -80,6 +81,15 @@ public:
   UFUNCTION(BlueprintPure, Category = "Weapon|Identity")
   FGameplayTag GetWeaponTypeTag() const { return WeaponTypeTag; }
 
+  UFUNCTION(BlueprintPure, Category = "Weapon|Identity")
+  FText GetWeaponDisplayName() const { return WeaponDisplayName; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Identity")
+  EWeaponEquipGroup GetEquipGroup() const { return EquipGroup; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Shop")
+  int32 GetWeaponShopPrice() const { return WeaponShopPrice; }
+
   UFUNCTION(BlueprintPure, Category = "Weapon|Loadout")
   FName GetAttachSocketNameOverride() const { return AttachSocketNameOverride; }
 
@@ -113,6 +123,16 @@ protected:
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Identity")
   FGameplayTag WeaponTypeTag;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Identity")
+  FText WeaponDisplayName = FText::FromString(TEXT("Weapon"));
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Identity")
+  EWeaponEquipGroup EquipGroup = EWeaponEquipGroup::Primary;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Shop",
+            meta = (ClampMin = "0"))
+  int32 WeaponShopPrice = 0;
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Loadout")
   FName AttachSocketNameOverride = NAME_None;
@@ -297,6 +317,7 @@ private:
   FVector2D BuildRecoilOffsetForShot();
   FVector2D GetPatternOffsetForShot(int32 ShotIndex) const;
   void ApplyCameraRecoil(const FVector2D &RecoilOffsetDeg);
+  bool UpdateCameraRecoilTick(float DeltaSeconds);
   APlayerController *ResolveLocalPlayerController();
   AController *GetOwningController() const;
   FVector GetMuzzleLocation() const;

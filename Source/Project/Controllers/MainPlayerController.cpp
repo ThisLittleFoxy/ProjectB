@@ -1,24 +1,31 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "MainPlayerController.h"
+#include "Controllers/MainPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "Character/ControllableCharacterInterface.h"
+#include "Character/CurrencyComponent.h"
 #include "Combat/CombatComponent.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "Interaction/InteractionComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
+#include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Interaction/InteractionComponent.h"
+#include "Interaction/WeaponShopTerminal.h"
+#include "Inventory/PlayerArmoryComponent.h"
 #include "Project.h"
+#include "TimerManager.h"
+#include "UI/Armory/PlayerInventoryWidgetBase.h"
+#include "UI/Armory/WeaponShopWidgetBase.h"
 #include "UI/HUD/CrosshairWidgetBase.h"
 #include "Utils/ProjectCheatManager.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 AMainPlayerController::AMainPlayerController() {
-  // Enable widget interaction
   bShowMouseCursor = false;
   bEnableClickEvents = true;
   bEnableTouchEvents = true;
@@ -26,6 +33,8 @@ AMainPlayerController::AMainPlayerController() {
   bEnableTouchOverEvents = false;
 
   CheatClass = UProjectCheatManager::StaticClass();
+  PlayerArmoryComponent =
+      CreateDefaultSubobject<UPlayerArmoryComponent>(TEXT("PlayerArmoryComponent"));
 }
 
 void AMainPlayerController::BeginPlay() {
@@ -38,7 +47,6 @@ void AMainPlayerController::BeginPlay() {
   UE_LOG(LogProject, Log, TEXT("ShouldUseTouchControls: %s"),
          ShouldUseTouchControls() ? TEXT("true") : TEXT("false"));
 
-  // spawn main gameplay HUD for local player
   if (IsLocalPlayerController() && HUDWidgetClass) {
     HUDWidget = CreateWidget<UCrosshairWidgetBase>(this, HUDWidgetClass);
     if (HUDWidget) {
@@ -50,13 +58,9 @@ void AMainPlayerController::BeginPlay() {
     }
   }
 
-  // only spawn touch controls on local player controllers
   if (ShouldUseTouchControls() && IsLocalPlayerController()) {
-    // spawn the mobile controls widget
-    MobileControlsWidget =
-        CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+    MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
     if (MobileControlsWidget) {
-      // add the controls to the player screen
       MobileControlsWidget->AddToPlayerScreen(0);
       UE_LOG(LogProject, Log,
              TEXT("Mobile controls widget created and added to screen"));
@@ -78,46 +82,23 @@ void AMainPlayerController::SetupInputComponent() {
   UE_LOG(LogProject, Log, TEXT("InputComponent valid: %s"),
          InputComponent ? TEXT("true") : TEXT("false"));
 
-  // only add IMCs for local player controllers
   if (IsLocalPlayerController()) {
-    // Add Input Mapping Contexts
     if (UEnhancedInputLocalPlayerSubsystem *Subsystem =
             ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
                 GetLocalPlayer())) {
       UE_LOG(LogProject, Log, TEXT("Enhanced Input Subsystem found"));
-      UE_LOG(LogProject, Log, TEXT("DefaultMappingContexts count: %d"),
-             DefaultMappingContexts.Num());
 
-      for (int32 i = 0; i < DefaultMappingContexts.Num(); ++i) {
-        UInputMappingContext *CurrentContext = DefaultMappingContexts[i];
+      for (int32 Index = 0; Index < DefaultMappingContexts.Num(); ++Index) {
+        UInputMappingContext *CurrentContext = DefaultMappingContexts[Index];
         if (CurrentContext) {
           Subsystem->AddMappingContext(CurrentContext, 0);
-          UE_LOG(LogProject, Log,
-                 TEXT("Added DefaultMappingContext [%d]: %s"), i,
-                 *CurrentContext->GetName());
-        } else {
-          UE_LOG(LogProject, Warning,
-                 TEXT("DefaultMappingContext [%d] is NULL"), i);
         }
       }
 
-      // only add these IMCs if we're not using mobile touch input
       if (!ShouldUseTouchControls()) {
-        UE_LOG(LogProject, Log,
-               TEXT("MobileExcludedMappingContexts count: %d"),
-               MobileExcludedMappingContexts.Num());
-
-        for (int32 i = 0; i < MobileExcludedMappingContexts.Num(); ++i) {
-          UInputMappingContext *CurrentContext =
-              MobileExcludedMappingContexts[i];
+        for (UInputMappingContext *CurrentContext : MobileExcludedMappingContexts) {
           if (CurrentContext) {
             Subsystem->AddMappingContext(CurrentContext, 0);
-            UE_LOG(LogProject, Log,
-                   TEXT("Added MobileExcludedMappingContext [%d]: %s"), i,
-                   *CurrentContext->GetName());
-          } else {
-            UE_LOG(LogProject, Warning,
-                   TEXT("MobileExcludedMappingContext [%d] is NULL"), i);
           }
         }
       }
@@ -126,8 +107,14 @@ void AMainPlayerController::SetupInputComponent() {
              TEXT("Failed to get Enhanced Input Subsystem!"));
     }
 
-    // Automatically bind all input actions from mapping contexts
     BindInputActions();
+
+    if (InputComponent) {
+      InputComponent->BindKey(EKeys::I, IE_Pressed, this,
+                              &AMainPlayerController::HandleInventoryToggleKey);
+      InputComponent->BindKey(EKeys::Escape, IE_Pressed, this,
+                              &AMainPlayerController::HandleCloseOverlayKey);
+    }
   } else {
     UE_LOG(LogProject, Warning,
            TEXT("Not a local player controller, skipping input setup"));
@@ -143,58 +130,34 @@ void AMainPlayerController::BindInputActions() {
     return;
   }
 
-  UE_LOG(LogProject, Log,
-         TEXT("EnhancedInputComponent cast successful, binding actions from "
-              "IMC..."));
-
-  // Collect all mapping contexts
   TArray<UInputMappingContext *> AllContexts;
   AllContexts.Append(DefaultMappingContexts);
   if (!ShouldUseTouchControls()) {
     AllContexts.Append(MobileExcludedMappingContexts);
   }
 
-  // Iterate through all mapping contexts and bind actions
   TSet<const UInputAction *> BoundActions;
   for (UInputMappingContext *Context : AllContexts) {
     if (!Context) {
       continue;
     }
 
-    UE_LOG(LogProject, Log, TEXT("Processing mapping context: %s"),
-           *Context->GetName());
-
-    // Get all mappings from the context
     const TArray<FEnhancedActionKeyMapping> &Mappings = Context->GetMappings();
-    UE_LOG(LogProject, Log, TEXT("Found %d mappings in context"),
-           Mappings.Num());
-
     for (const FEnhancedActionKeyMapping &Mapping : Mappings) {
       const UInputAction *Action = Mapping.Action;
       if (!Action || BoundActions.Contains(Action)) {
         continue;
       }
 
-      FString ActionName = Action->GetName();
-      UE_LOG(LogProject, Log, TEXT("Found Input Action: %s"), *ActionName);
-
-      // Bind based on action name
+      const FString ActionName = Action->GetName();
       if (ActionName.Contains(TEXT("Move")) ||
           ActionName.Contains(TEXT("IA_Move"))) {
-        EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
-                                           this,
+        EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleMove);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleMove"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Look")) ||
                  ActionName.Contains(TEXT("IA_Look"))) {
-        EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered,
-                                           this,
+        EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleLook);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleLook"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Jump")) ||
                  ActionName.Contains(TEXT("IA_Jump"))) {
         EnhancedInputComponent->BindAction(
@@ -203,9 +166,6 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &AMainPlayerController::HandleJumpCompleted);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleJump"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Sprint")) ||
                  ActionName.Contains(TEXT("IA_Sprint"))) {
         EnhancedInputComponent->BindAction(
@@ -214,17 +174,16 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &AMainPlayerController::HandleSprintCompleted);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleSprint"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Interact")) ||
                  ActionName.Contains(TEXT("IA_Interact"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
             &AMainPlayerController::HandleInteract);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleInteract"),
-               *ActionName);
-        BoundActions.Add(Action);
+      } else if (ActionName.Contains(TEXT("Inventory")) ||
+                 ActionName.Contains(TEXT("IA_Inventory"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleInventoryToggle);
       } else if (ActionName.Contains(TEXT("Fire")) ||
                  ActionName.Contains(TEXT("IA_Fire"))) {
         EnhancedInputComponent->BindAction(
@@ -233,26 +192,17 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Completed, this,
             &AMainPlayerController::HandleFireCompleted);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleFire"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Reload")) ||
                  ActionName.Contains(TEXT("IA_Reload"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
             &AMainPlayerController::HandleReload);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleReload"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Scrol")) ||
                  ActionName.Contains(TEXT("Scroll")) ||
                  ActionName.Contains(TEXT("WeaponCycle"))) {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Triggered, this,
             &AMainPlayerController::HandleWeaponCycle);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleWeaponCycle"),
-               *ActionName);
-        BoundActions.Add(Action);
       } else if (ActionName.Contains(TEXT("Scope")) ||
                  ActionName.Contains(TEXT("IA_Scope")) ||
                  ActionName.Contains(TEXT("Aim"))) {
@@ -265,18 +215,11 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Canceled, this,
             &AMainPlayerController::HandleScopeCompleted);
-        UE_LOG(LogProject, Log, TEXT("Bound action '%s' to HandleScope"),
-               *ActionName);
-        BoundActions.Add(Action);
-      } else {
-        UE_LOG(LogProject, Warning, TEXT("No handler found for action: %s"),
-               *ActionName);
       }
+
+      BoundActions.Add(Action);
     }
   }
-
-  UE_LOG(LogProject, Log, TEXT("Total actions bound: %d"),
-         BoundActions.Num());
 }
 
 void AMainPlayerController::OnPossess(APawn *InPawn) {
@@ -286,33 +229,172 @@ void AMainPlayerController::OnPossess(APawn *InPawn) {
          TEXT("MainPlayerController::OnPossess - Pawn: %s"),
          InPawn ? *InPawn->GetName() : TEXT("NULL"));
 
-  if (InPawn) {
-    ACharacter *PossessedCharacter = Cast<ACharacter>(InPawn);
-    if (PossessedCharacter) {
-      UE_LOG(LogProject, Verbose, TEXT("Possessed Character: %s"),
-             *PossessedCharacter->GetName());
-      if (UCharacterMovementComponent *MovementComp =
-              PossessedCharacter->GetCharacterMovement()) {
-        UE_LOG(LogProject, Verbose,
-               TEXT("CharacterMovementComponent found, MovementMode: %d"),
-               (int32)MovementComp->MovementMode);
-      } else {
-        UE_LOG(LogProject, Warning,
-               TEXT("CharacterMovementComponent not found on Character!"));
-      }
-    } else {
-      UE_LOG(LogProject, Warning,
-             TEXT("Possessed pawn is not a Character!"));
+  if (!InPawn) {
+    return;
+  }
+
+  if (ACharacter *PossessedCharacter = Cast<ACharacter>(InPawn)) {
+    if (UCharacterMovementComponent *MovementComp =
+            PossessedCharacter->GetCharacterMovement()) {
+      UE_LOG(LogProject, Verbose,
+             TEXT("CharacterMovementComponent found, MovementMode: %d"),
+             (int32)MovementComp->MovementMode);
     }
+  }
+
+  if (UWorld *World = GetWorld()) {
+    TWeakObjectPtr<APawn> WeakPawn = InPawn;
+    World->GetTimerManager().SetTimerForNextTick(
+        FTimerDelegate::CreateWeakLambda(this, [this, WeakPawn]() {
+          ApplyStartupPawnState(WeakPawn.Get());
+        }));
+  } else {
+    ApplyStartupPawnState(InPawn);
   }
 }
 
+void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
+  if (!InPawn || !bApplyStartupPawnStateOnPossess || !PlayerArmoryComponent) {
+    return;
+  }
+
+  PlayerArmoryComponent->BindToPawn(InPawn);
+
+  if (bApplyStartupPawnStateOnlyOnce && bHasAppliedStartupPawnState) {
+    return;
+  }
+
+  if (bClearStartingLoadoutOnPossess) {
+    if (UCombatComponent *CombatComp =
+            InPawn->FindComponentByClass<UCombatComponent>()) {
+      CombatComp->ClearLoadout();
+    }
+  }
+
+  int32 InitialCurrency = 0;
+  if (bSetStartingCurrencyOnPossess) {
+    InitialCurrency = StartingCurrency;
+  } else if (const UCurrencyComponent *CurrencyComp =
+                 InPawn->FindComponentByClass<UCurrencyComponent>()) {
+    InitialCurrency = CurrencyComp->GetCurrency();
+  }
+
+  PlayerArmoryComponent->InitializeEmptySession(InitialCurrency);
+  bHasAppliedStartupPawnState = true;
+}
+
 bool AMainPlayerController::ShouldUseTouchControls() const {
-  // are we on a mobile platform? Should we force touch?
   return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
 
-// ========== Movement Handlers ==========
+void AMainPlayerController::UpdateArmoryOverlayInputState() {
+  const bool bOverlayOpen = IsAnyArmoryOverlayOpen();
+  SetMouseCursorVisible(bOverlayOpen);
+  SetIgnoreMoveInput(bOverlayOpen);
+  SetIgnoreLookInput(bOverlayOpen);
+
+  if (HUDWidget) {
+    HUDWidget->BP_OnArmoryOverlayStateChanged(bOverlayOpen);
+  }
+}
+
+void AMainPlayerController::CloseAllArmoryOverlays() {
+  CloseWeaponShop();
+  CloseInventory();
+}
+
+void AMainPlayerController::OpenWeaponShop(AWeaponShopTerminal *ShopTerminal) {
+  if (!IsLocalPlayerController() || !WeaponShopWidgetClass || !ShopTerminal) {
+    return;
+  }
+
+  if (InventoryWidget && InventoryWidget->IsInViewport()) {
+    InventoryWidget->RemoveFromParent();
+  }
+
+  if (!WeaponShopWidget) {
+    WeaponShopWidget = CreateWidget<UWeaponShopWidgetBase>(this, WeaponShopWidgetClass);
+  }
+  if (!WeaponShopWidget) {
+    UE_LOG(LogProject, Warning, TEXT("Weapon shop widget class is not configured"));
+    return;
+  }
+
+  WeaponShopWidget->SetShopTerminal(ShopTerminal);
+  if (!WeaponShopWidget->IsInViewport()) {
+    WeaponShopWidget->AddToPlayerScreen(ArmoryWidgetZOrder);
+  }
+
+  UpdateArmoryOverlayInputState();
+}
+
+void AMainPlayerController::CloseWeaponShop() {
+  if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
+    WeaponShopWidget->RemoveFromParent();
+    WeaponShopWidget->SetShopTerminal(nullptr);
+  }
+
+  UpdateArmoryOverlayInputState();
+}
+
+void AMainPlayerController::OpenInventory() {
+  if (!IsLocalPlayerController() || !InventoryWidgetClass) {
+    return;
+  }
+
+  if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
+    WeaponShopWidget->RemoveFromParent();
+  }
+
+  if (!InventoryWidget) {
+    InventoryWidget =
+        CreateWidget<UPlayerInventoryWidgetBase>(this, InventoryWidgetClass);
+  }
+  if (!InventoryWidget) {
+    UE_LOG(LogProject, Warning, TEXT("Inventory widget class is not configured"));
+    return;
+  }
+
+  if (!InventoryWidget->IsInViewport()) {
+    InventoryWidget->AddToPlayerScreen(ArmoryWidgetZOrder);
+  }
+
+  UpdateArmoryOverlayInputState();
+}
+
+void AMainPlayerController::CloseInventory() {
+  if (InventoryWidget && InventoryWidget->IsInViewport()) {
+    InventoryWidget->RemoveFromParent();
+  }
+
+  UpdateArmoryOverlayInputState();
+}
+
+void AMainPlayerController::ToggleInventory() {
+  if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
+    CloseWeaponShop();
+    OpenInventory();
+    return;
+  }
+
+  if (InventoryWidget && InventoryWidget->IsInViewport()) {
+    CloseInventory();
+    return;
+  }
+
+  OpenInventory();
+}
+
+bool AMainPlayerController::IsAnyArmoryOverlayOpen() const {
+  return bHasExternalArmoryOverlayOpen ||
+         (WeaponShopWidget && WeaponShopWidget->IsInViewport()) ||
+         (InventoryWidget && InventoryWidget->IsInViewport());
+}
+
+void AMainPlayerController::SetExternalArmoryOverlayOpen(bool bIsOpen) {
+  bHasExternalArmoryOverlayOpen = bIsOpen;
+  UpdateArmoryOverlayInputState();
+}
 
 void AMainPlayerController::HandleMove(const FInputActionValue &Value) {
   const FVector2D MovementVector = Value.Get<FVector2D>();
@@ -322,29 +404,22 @@ void AMainPlayerController::HandleMove(const FInputActionValue &Value) {
     return;
   }
 
-  // Calculate direction based on controller rotation (FPS style)
   const FRotator Rotation = GetControlRotation();
   const FRotator YawRotation(0, Rotation.Yaw, 0);
-
   const FVector ForwardDirection =
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
   const FVector RightDirection =
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-  // Apply movement input
   ControlledPawn->AddMovementInput(ForwardDirection, MovementVector.Y);
   ControlledPawn->AddMovementInput(RightDirection, MovementVector.X);
 }
 
 void AMainPlayerController::HandleLook(const FInputActionValue &Value) {
   const FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-  // Add yaw and pitch input to controller
   AddYawInput(LookAxisVector.X);
   AddPitchInput(LookAxisVector.Y);
 }
-
-// ========== Jump Handlers ==========
 
 void AMainPlayerController::HandleJumpStarted(const FInputActionValue &Value) {
   if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
@@ -352,112 +427,102 @@ void AMainPlayerController::HandleJumpStarted(const FInputActionValue &Value) {
   }
 }
 
-void AMainPlayerController::HandleJumpCompleted(
-    const FInputActionValue &Value) {
+void AMainPlayerController::HandleJumpCompleted(const FInputActionValue &Value) {
   if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
     ControlledCharacter->StopJumping();
   }
 }
 
-// ========== Sprint Handlers ==========
-
-void AMainPlayerController::HandleSprintStarted(
-    const FInputActionValue &Value) {
+void AMainPlayerController::HandleSprintStarted(const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
-  if (!ControlledPawn) {
+  if (!ControlledPawn || IsAnyArmoryOverlayOpen()) {
     return;
   }
 
-  // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StartSprint(ControlledPawn);
-    UE_LOG(LogProject, Log, TEXT("Sprint started via interface"));
   }
 }
 
-void AMainPlayerController::HandleSprintCompleted(
-    const FInputActionValue &Value) {
+void AMainPlayerController::HandleSprintCompleted(const FInputActionValue &Value) {
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
   }
 
-  // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StopSprint(ControlledPawn);
-    UE_LOG(LogProject, Log, TEXT("Sprint stopped via interface"));
   }
 }
 
-// ========== Interact Handler ==========
-
 void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
   }
 
-  // Prefer direct component call to avoid mandatory BP graph wiring
   if (UInteractionComponent *InteractionComp =
           ControlledPawn->FindComponentByClass<UInteractionComponent>()) {
     InteractionComp->TryInteract();
-    UE_LOG(LogProject, Log, TEXT("Interact triggered via InteractionComponent"));
     return;
   }
 
-  // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_DoInteract(ControlledPawn);
-    UE_LOG(LogProject, Log, TEXT("Interact triggered via interface"));
   }
 }
 
-// ========== Fire Handlers ==========
-
 void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
   }
 
-  // Prefer component-driven combat flow (no EventGraph setup required)
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StartFire();
-    UE_LOG(LogProject, Log, TEXT("Fire started via CombatComponent"));
     return;
   }
 
-  // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StartFire(ControlledPawn);
-    UE_LOG(LogProject, Log, TEXT("Fire started via interface"));
   }
 }
 
-void AMainPlayerController::HandleFireCompleted(
-    const FInputActionValue &Value) {
+void AMainPlayerController::HandleFireCompleted(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
   }
 
-  // Prefer component-driven combat flow (no EventGraph setup required)
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StopFire();
-    UE_LOG(LogProject, Log, TEXT("Fire stopped via CombatComponent"));
     return;
   }
 
-  // Call interface method if pawn implements it
   if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
     IControllableCharacterInterface::Execute_StopFire(ControlledPawn);
-    UE_LOG(LogProject, Log, TEXT("Fire stopped via interface"));
   }
 }
 
 void AMainPlayerController::HandleReload(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -465,13 +530,15 @@ void AMainPlayerController::HandleReload(const FInputActionValue &Value) {
 
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
-    const bool bReloaded = CombatComp->Reload();
-    UE_LOG(LogProject, Log, TEXT("Reload via CombatComponent: %s"),
-           bReloaded ? TEXT("true") : TEXT("false"));
+    CombatComp->Reload();
   }
 }
 
 void AMainPlayerController::HandleScopeStarted(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -480,12 +547,14 @@ void AMainPlayerController::HandleScopeStarted(const FInputActionValue &Value) {
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StartScope();
-    UE_LOG(LogProject, Log, TEXT("Scope started via CombatComponent"));
   }
 }
 
-void AMainPlayerController::HandleScopeCompleted(
-    const FInputActionValue &Value) {
+void AMainPlayerController::HandleScopeCompleted(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -494,11 +563,14 @@ void AMainPlayerController::HandleScopeCompleted(
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StopScope();
-    UE_LOG(LogProject, Log, TEXT("Scope stopped via CombatComponent"));
   }
 }
 
 void AMainPlayerController::HandleWeaponCycle(const FInputActionValue &Value) {
+  if (IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
     return;
@@ -509,44 +581,62 @@ void AMainPlayerController::HandleWeaponCycle(const FInputActionValue &Value) {
     return;
   }
 
-  const UWorld *World = GetWorld();
-  if (World) {
+  if (const UWorld *World = GetWorld()) {
     const float TimeSeconds = World->GetTimeSeconds();
     if (TimeSeconds - LastWeaponCycleInputTimeSeconds <
         FMath::Max(0.0f, WeaponCycleInputCooldown)) {
       return;
     }
-
     LastWeaponCycleInputTimeSeconds = TimeSeconds;
   }
 
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
-    const bool bSwitched = CycleValue > 0.0f ? CombatComp->EquipNextWeapon()
-                                             : CombatComp->EquipPreviousWeapon();
-    UE_LOG(LogProject, Log, TEXT("Weapon cycle (%.2f) switched: %s"), CycleValue,
-           bSwitched ? TEXT("true") : TEXT("false"));
+    if (CycleValue > 0.0f) {
+      CombatComp->EquipNextWeapon();
+    } else {
+      CombatComp->EquipPreviousWeapon();
+    }
   }
+}
+
+void AMainPlayerController::HandleInventoryToggle(const FInputActionValue &Value) {
+  ToggleInventory();
+}
+
+void AMainPlayerController::HandleInventoryToggleKey() { ToggleInventory(); }
+
+void AMainPlayerController::HandleCloseOverlayKey() {
+  if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
+    CloseWeaponShop();
+    return;
+  }
+
+  if (InventoryWidget && InventoryWidget->IsInViewport()) {
+    CloseInventory();
+  }
+}
+
+void AMainPlayerController::SetApplyStartupPawnStateOnPossess(
+    bool bShouldApply) {
+  bApplyStartupPawnStateOnPossess = bShouldApply;
+}
+
+void AMainPlayerController::ResetStartupPawnStateTracking() {
+  bHasAppliedStartupPawnState = false;
 }
 
 void AMainPlayerController::SetMouseCursorVisible(bool bVisible) {
   bShowMouseCursor = bVisible;
   bIsInteractingWithUI = bVisible;
 
-  // Set input mode based on cursor visibility
   if (bVisible) {
-    // Allow both game and UI input
     FInputModeGameAndUI InputMode;
     InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
     InputMode.SetHideCursorDuringCapture(false);
     SetInputMode(InputMode);
-
-    UE_LOG(LogProject, Log, TEXT("Mouse cursor enabled for UI interaction"));
   } else {
-    // Game input only
     FInputModeGameOnly InputMode;
     SetInputMode(InputMode);
-
-    UE_LOG(LogProject, Log, TEXT("Mouse cursor disabled, game mode active"));
   }
 }

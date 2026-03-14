@@ -19,6 +19,17 @@ int32 UCurrencyComponent::AddCurrency(int32 Amount) {
   return DeltaCurrency;
 }
 
+int32 UCurrencyComponent::SetCurrency(int32 NewCurrency) {
+  const int32 PreviousCurrency = CurrentCurrency;
+  CurrentCurrency = FMath::Max(0, NewCurrency);
+  const int32 DeltaCurrency = CurrentCurrency - PreviousCurrency;
+  if (DeltaCurrency != 0) {
+    OnCurrencyChanged.Broadcast(this, CurrentCurrency, DeltaCurrency);
+  }
+
+  return DeltaCurrency;
+}
+
 bool UCurrencyComponent::SpendCurrency(int32 Amount) {
   if (Amount <= 0 || CurrentCurrency < Amount) {
     return false;

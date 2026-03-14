@@ -6,21 +6,15 @@
 #include "GameFramework/PlayerController.h"
 #include "MainPlayerController.generated.h"
 
-class UInputMappingContext;
-class UUserWidget;
+class AWeaponShopTerminal;
 class UCrosshairWidgetBase;
+class UInputMappingContext;
+class UPlayerArmoryComponent;
+class UPlayerInventoryWidgetBase;
+class UUserWidget;
+class UWeaponShopWidgetBase;
 struct FInputActionValue;
 
-/**
- * FPS PlayerController that handles all input and delegates to the controlled pawn.
- *
- * The controller processes input and calls methods on the pawn via IControllableCharacterInterface.
- * For basic movement (Move, Look, Jump), it uses standard Pawn/Character methods.
- * For extended actions (Sprint, Interact, Fire), it uses the interface.
- *
- * Your Blueprint Character should implement IControllableCharacterInterface to receive
- * Sprint, Interact, and Fire inputs.
- */
 UCLASS(abstract)
 class AMainPlayerController : public APlayerController {
   GENERATED_BODY()
@@ -28,119 +22,156 @@ class AMainPlayerController : public APlayerController {
 public:
   AMainPlayerController();
 
-protected:
-  // ========== Input Mapping Contexts ==========
+  UFUNCTION(BlueprintPure, Category = "Gameplay|Armory")
+  UPlayerArmoryComponent *GetPlayerArmoryComponent() const {
+    return PlayerArmoryComponent;
+  }
 
-  /** Input Mapping Contexts applied to all platforms */
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void OpenWeaponShop(AWeaponShopTerminal *ShopTerminal);
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void CloseWeaponShop();
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void OpenInventory();
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void CloseInventory();
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void ToggleInventory();
+
+  UFUNCTION(BlueprintPure, Category = "UI|Armory")
+  bool IsAnyArmoryOverlayOpen() const;
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Armory")
+  void SetExternalArmoryOverlayOpen(bool bIsOpen);
+
+protected:
   UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
   TArray<UInputMappingContext *> DefaultMappingContexts;
 
-  /** Input Mapping Contexts excluded on mobile (e.g., mouse look) */
   UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
   TArray<UInputMappingContext *> MobileExcludedMappingContexts;
 
-  // ========== Touch Controls ==========
-
-  /** Mobile controls widget to spawn */
   UPROPERTY(EditAnywhere, Category = "Input|Touch Controls")
   TSubclassOf<UUserWidget> MobileControlsWidgetClass;
 
-  /** Pointer to the mobile controls widget */
   UPROPERTY()
   TObjectPtr<UUserWidget> MobileControlsWidget;
 
-  /** If true, force UMG touch controls even on non-mobile platforms */
   UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
   bool bForceTouchControls = false;
 
-  // ========== HUD ==========
-
-  /** Main in-game HUD widget (crosshair/ammo/health) */
   UPROPERTY(EditAnywhere, Category = "UI|HUD")
   TSubclassOf<UCrosshairWidgetBase> HUDWidgetClass;
 
-  /** HUD z-order when added to player screen */
   UPROPERTY(EditAnywhere, Category = "UI|HUD")
   int32 HUDWidgetZOrder = 0;
 
-  /** Spawned HUD widget instance */
   UPROPERTY(Transient, BlueprintReadOnly, Category = "UI|HUD",
             meta = (AllowPrivateAccess = "true"))
   TObjectPtr<UCrosshairWidgetBase> HUDWidget;
 
-  // ========== UI State ==========
+  UPROPERTY(EditAnywhere, Category = "UI|Armory")
+  TSubclassOf<UWeaponShopWidgetBase> WeaponShopWidgetClass;
 
-  /** Currently interacting with UI widget */
+  UPROPERTY(EditAnywhere, Category = "UI|Armory")
+  TSubclassOf<UPlayerInventoryWidgetBase> InventoryWidgetClass;
+
+  UPROPERTY(EditAnywhere, Category = "UI|Armory")
+  int32 ArmoryWidgetZOrder = 10;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UWeaponShopWidgetBase> WeaponShopWidget;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UPlayerInventoryWidgetBase> InventoryWidget;
+
   UPROPERTY(BlueprintReadOnly, Category = "UI")
   bool bIsInteractingWithUI = false;
 
-  // ========== Lifecycle ==========
+  UPROPERTY(Transient, BlueprintReadOnly, Category = "UI|Armory")
+  bool bHasExternalArmoryOverlayOpen = false;
+
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gameplay|Armory",
+            meta = (AllowPrivateAccess = "true"))
+  TObjectPtr<UPlayerArmoryComponent> PlayerArmoryComponent;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay|Startup")
+  bool bApplyStartupPawnStateOnPossess = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay|Startup")
+  bool bApplyStartupPawnStateOnlyOnce = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay|Startup")
+  bool bClearStartingLoadoutOnPossess = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay|Startup")
+  bool bSetStartingCurrencyOnPossess = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay|Startup",
+            meta = (ClampMin = "0", EditCondition = "bSetStartingCurrencyOnPossess"))
+  int32 StartingCurrency = 500;
+
+  UPROPERTY(Transient)
+  bool bHasAppliedStartupPawnState = false;
 
   virtual void BeginPlay() override;
   virtual void SetupInputComponent() override;
   virtual void OnPossess(APawn *InPawn) override;
 
-  // ========== Input Setup ==========
-
-  /** Returns true if the player should use UMG touch controls */
   bool ShouldUseTouchControls() const;
-
-  /** Bind all input actions from mapping contexts automatically */
   void BindInputActions();
+  void ApplyStartupPawnState(APawn *InPawn);
+  void UpdateArmoryOverlayInputState();
+  void CloseAllArmoryOverlays();
 
-  // ========== Input Handlers ==========
-
-  /** Movement input - calculates direction from camera and applies to pawn */
   UFUNCTION()
   void HandleMove(const FInputActionValue &Value);
 
-  /** Look input - applies yaw/pitch to controller rotation */
   UFUNCTION()
   void HandleLook(const FInputActionValue &Value);
 
-  /** Jump started */
   UFUNCTION()
   void HandleJumpStarted(const FInputActionValue &Value);
 
-  /** Jump completed */
   UFUNCTION()
   void HandleJumpCompleted(const FInputActionValue &Value);
 
-  /** Sprint started */
   UFUNCTION()
   void HandleSprintStarted(const FInputActionValue &Value);
 
-  /** Sprint completed */
   UFUNCTION()
   void HandleSprintCompleted(const FInputActionValue &Value);
 
-  /** Interact pressed */
   UFUNCTION()
   void HandleInteract(const FInputActionValue &Value);
 
-  /** Fire started */
   UFUNCTION()
   void HandleFireStarted(const FInputActionValue &Value);
 
-  /** Fire completed */
   UFUNCTION()
   void HandleFireCompleted(const FInputActionValue &Value);
 
-  /** Reload pressed */
   UFUNCTION()
   void HandleReload(const FInputActionValue &Value);
 
-  /** Scope/aim started (e.g. RMB pressed) */
   UFUNCTION()
   void HandleScopeStarted(const FInputActionValue &Value);
 
-  /** Scope/aim ended (e.g. RMB released) */
   UFUNCTION()
   void HandleScopeCompleted(const FInputActionValue &Value);
 
-  /** Weapon cycle input (mouse wheel axis or equivalent) */
   UFUNCTION()
   void HandleWeaponCycle(const FInputActionValue &Value);
+
+  UFUNCTION()
+  void HandleInventoryToggle(const FInputActionValue &Value);
+
+  void HandleInventoryToggleKey();
+  void HandleCloseOverlayKey();
 
   UPROPERTY(EditAnywhere, Category = "Input|Combat", meta = (ClampMin = "0.0"))
   float WeaponCycleInputCooldown = 0.12f;
@@ -149,7 +180,12 @@ protected:
   float LastWeaponCycleInputTimeSeconds = -1000.0f;
 
 public:
-  /** Show/hide mouse cursor and set appropriate input mode */
+  UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")
+  void SetApplyStartupPawnStateOnPossess(bool bShouldApply);
+
+  UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")
+  void ResetStartupPawnStateTracking();
+
   UFUNCTION(BlueprintCallable, Category = "UI")
   void SetMouseCursorVisible(bool bVisible);
 };
