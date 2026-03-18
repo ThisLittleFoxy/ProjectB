@@ -50,6 +50,8 @@ protected:
 
   AMainPlayerController *ResolveMainPlayerController() const;
 
+  virtual void HandleWidgetRefreshRequested();
+
   void NotifyWidgetRefreshRequested();
 
 private:

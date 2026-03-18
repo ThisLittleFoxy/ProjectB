@@ -103,8 +103,11 @@ AMainPlayerController *UArmoryWidgetBase::ResolveMainPlayerController() const {
   return Cast<AMainPlayerController>(GetOwningPlayer());
 }
 
+void UArmoryWidgetBase::HandleWidgetRefreshRequested() {}
+
 void UArmoryWidgetBase::NotifyWidgetRefreshRequested() {
   BP_OnWidgetRefreshRequested();
+  HandleWidgetRefreshRequested();
 }
 
 void UArmoryWidgetBase::HandleArmoryChanged(

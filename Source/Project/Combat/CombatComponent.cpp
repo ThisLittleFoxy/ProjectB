@@ -63,10 +63,6 @@ void CopyFirstPersonRenderSettings(USkeletalMeshComponent *SourceMesh,
   TargetMesh->MarkRenderStateDirty();
 }
 
-int32 GetSlotIndex(EWeaponLoadoutSlot Slot) {
-  return static_cast<int32>(Slot);
-}
-
 bool IsValidLoadoutSlotIndex(int32 SlotIndex) {
   return SlotIndex >= 0 && SlotIndex < ProjectWeaponLoadout::SlotCount;
 }
@@ -252,7 +248,7 @@ bool UCombatComponent::SetWeaponForSlot(EWeaponLoadoutSlot Slot,
 
   EnsureLoadoutArraySize();
 
-  const int32 SlotIndex = GetSlotIndex(Slot);
+  const int32 SlotIndex = ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Slot));
   if (!IsValidLoadoutSlotIndex(SlotIndex)) {
     return false;
   }
@@ -283,7 +279,7 @@ bool UCombatComponent::SetWeaponForSlot(EWeaponLoadoutSlot Slot,
 void UCombatComponent::ClearWeaponSlot(EWeaponLoadoutSlot Slot) {
   EnsureLoadoutArraySize();
 
-  const int32 SlotIndex = GetSlotIndex(Slot);
+  const int32 SlotIndex = ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Slot));
   if (!IsValidLoadoutSlotIndex(SlotIndex)) {
     return;
   }
@@ -319,7 +315,7 @@ void UCombatComponent::ClearWeaponSlot(EWeaponLoadoutSlot Slot) {
 }
 
 bool UCombatComponent::SetActiveLoadoutSlot(EWeaponLoadoutSlot Slot) {
-  return EquipWeaponSlot(GetSlotIndex(Slot));
+  return EquipWeaponSlot(ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Slot)));
 }
 
 bool UCombatComponent::EquipActiveSlot() {
@@ -329,7 +325,7 @@ bool UCombatComponent::EquipActiveSlot() {
 }
 
 AWeaponBase *UCombatComponent::GetWeaponInSlot(EWeaponLoadoutSlot Slot) const {
-  const int32 SlotIndex = GetSlotIndex(Slot);
+  const int32 SlotIndex = ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Slot));
   return SpawnedLoadoutWeapons.IsValidIndex(SlotIndex)
              ? SpawnedLoadoutWeapons[SlotIndex]
              : nullptr;

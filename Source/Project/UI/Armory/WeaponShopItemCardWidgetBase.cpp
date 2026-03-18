@@ -79,8 +79,7 @@ bool UWeaponShopItemCardWidgetBase::IsPurchaseBlockedByPendingAssignment() const
 
 bool UWeaponShopItemCardWidgetBase::CanPurchaseConfiguredWeapon() const {
   if (const UWeaponShopWidgetBase *ShopWidget = ResolveOwningShopWidget()) {
-    return !ShopWidget->HasPendingSlotAssignment() &&
-           ShopWidget->CanPurchaseWeapon(ConfiguredWeaponClass, GetResolvedPrice());
+    return ShopWidget->CanPurchaseWeapon(ConfiguredWeaponClass, GetResolvedPrice());
   }
 
   return false;
@@ -99,6 +98,12 @@ FText UWeaponShopItemCardWidgetBase::GetPurchaseButtonText() const {
     return FText::FromString(TEXT("Not Enough"));
   }
 
+  if (const UWeaponShopWidgetBase *ShopWidget = ResolveOwningShopWidget()) {
+    if (!ShopWidget->CanStoreWeapon(ConfiguredWeaponClass)) {
+      return FText::FromString(TEXT("No Space"));
+    }
+  }
+
   return FText::FromString(TEXT("Buy"));
 }
 
@@ -113,6 +118,12 @@ FText UWeaponShopItemCardWidgetBase::GetStatusText() const {
 
   if (!IsConfiguredWeaponAffordable()) {
     return FText::FromString(TEXT("Not enough coins"));
+  }
+
+  if (const UWeaponShopWidgetBase *ShopWidget = ResolveOwningShopWidget()) {
+    if (!ShopWidget->CanStoreWeapon(ConfiguredWeaponClass)) {
+      return FText::FromString(TEXT("Not enough inventory space"));
+    }
   }
 
   return FText::GetEmpty();

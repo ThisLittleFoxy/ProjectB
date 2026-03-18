@@ -57,6 +57,8 @@ TArray<FWeaponShopOfferViewData> UWeaponShopWidgetBase::GetShopOfferViewData() c
     OfferViewData.bOwned =
         ArmoryComponent && ArmoryComponent->HasOwnedWeapon(Offer.WeaponClass);
     OfferViewData.bAffordable = CurrentMoney >= EffectivePrice;
+    OfferViewData.bFitsInInventory =
+        ArmoryComponent && ArmoryComponent->CanStoreWeapon(Offer.WeaponClass);
     OfferViewData.bCanPurchase =
         ArmoryComponent &&
         ArmoryComponent->CanPurchaseWeapon(Offer.WeaponClass, EffectivePrice);
@@ -68,7 +70,7 @@ TArray<FWeaponShopOfferViewData> UWeaponShopWidgetBase::GetShopOfferViewData() c
 }
 
 bool UWeaponShopWidgetBase::HasPendingSlotAssignment() const {
-  return PendingAssignmentWeaponClass.Get() != nullptr;
+  return false;
 }
 
 FText UWeaponShopWidgetBase::GetPendingAssignmentWeaponDisplayName() const {
@@ -116,56 +118,39 @@ bool UWeaponShopWidgetBase::CanPurchaseWeapon(TSubclassOf<AWeaponBase> WeaponCla
   return false;
 }
 
-bool UWeaponShopWidgetBase::CanAssignPendingWeaponToSlot(
-    EWeaponLoadoutSlot LoadoutSlot) const {
+bool UWeaponShopWidgetBase::CanStoreWeapon(
+    TSubclassOf<AWeaponBase> WeaponClass) const {
   if (const UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent()) {
-    return PendingAssignmentWeaponClass &&
-           ArmoryComponent->CanAssignWeaponToSlot(PendingAssignmentWeaponClass,
-                                                  LoadoutSlot);
+    return ArmoryComponent->CanStoreWeapon(WeaponClass);
   }
 
   return false;
 }
 
+bool UWeaponShopWidgetBase::CanAssignPendingWeaponToSlot(
+    EWeaponLoadoutSlot LoadoutSlot) const {
+  return false;
+}
+
 bool UWeaponShopWidgetBase::IsPurchaseFlowBlocked() const {
-  return HasPendingSlotAssignment();
+  return false;
 }
 
 bool UWeaponShopWidgetBase::PurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass,
                                            int32 Price) {
-  if (HasPendingSlotAssignment()) {
-    return false;
-  }
-
   UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent();
   if (!ArmoryComponent || !ArmoryComponent->PurchaseWeapon(WeaponClass, Price)) {
     return false;
   }
 
-  PendingAssignmentWeaponClass = WeaponClass;
+  PendingAssignmentWeaponClass = nullptr;
   NotifyWidgetRefreshRequested();
   return true;
 }
 
 bool UWeaponShopWidgetBase::AssignPendingWeaponToSlot(
     EWeaponLoadoutSlot LoadoutSlot) {
-  UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent();
-  if (!ArmoryComponent || !PendingAssignmentWeaponClass) {
-    return false;
-  }
-
-  if (!ArmoryComponent->AssignWeaponToSlot(PendingAssignmentWeaponClass,
-                                           LoadoutSlot)) {
-    return false;
-  }
-
-  if (!ArmoryComponent->IsSlotOccupied(ArmoryComponent->GetActiveSlot())) {
-    ArmoryComponent->SetActiveSlot(LoadoutSlot);
-  }
-
-  PendingAssignmentWeaponClass = nullptr;
-  NotifyWidgetRefreshRequested();
-  return true;
+  return false;
 }
 
 void UWeaponShopWidgetBase::SkipPendingAssignment() {

@@ -169,8 +169,6 @@ protected:
 
   UFUNCTION()
   void HandleInventoryToggle(const FInputActionValue &Value);
-
-  void HandleInventoryToggleKey();
   void HandleCloseOverlayKey();
 
   UPROPERTY(EditAnywhere, Category = "Input|Combat", meta = (ClampMin = "0.0"))

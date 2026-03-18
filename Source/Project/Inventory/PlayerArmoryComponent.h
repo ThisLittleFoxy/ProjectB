@@ -4,6 +4,7 @@
 
 #include "Combat/WeaponLoadoutTypes.h"
 #include "Components/ActorComponent.h"
+#include "Inventory/InventoryItemTypes.h"
 #include "PlayerArmoryComponent.generated.h"
 
 class APawn;
@@ -49,21 +50,20 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Armory|Shop")
   bool PurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass, int32 Price);
 
+  UFUNCTION(BlueprintPure, Category = "Armory|Shop")
+  bool CanStoreWeapon(TSubclassOf<AWeaponBase> WeaponClass) const;
+
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
   bool HasOwnedWeapon(TSubclassOf<AWeaponBase> WeaponClass) const;
 
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
-  TArray<TSubclassOf<AWeaponBase>> GetOwnedWeapons() const {
-    return OwnedWeaponClasses;
-  }
+  TArray<TSubclassOf<AWeaponBase>> GetOwnedWeapons() const;
 
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
   TSubclassOf<AWeaponBase> GetAssignedWeaponForSlot(EWeaponLoadoutSlot Slot) const;
 
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
-  TArray<TSubclassOf<AWeaponBase>> GetAssignedWeaponsBySlot() const {
-    return SlotAssignments;
-  }
+  TArray<TSubclassOf<AWeaponBase>> GetAssignedWeaponsBySlot() const;
 
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
   bool IsSlotOccupied(EWeaponLoadoutSlot Slot) const;
@@ -84,6 +84,65 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Armory|Inventory")
   bool SetActiveSlot(EWeaponLoadoutSlot Slot);
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  int32 GetStorageGridWidth() const { return FMath::Max(1, StorageGridWidth); }
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  int32 GetStorageGridHeight() const { return FMath::Max(1, StorageGridHeight); }
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  int32 GetTotalGridCells() const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  int32 GetUsedGridCells() const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  float GetUsedWeight() const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  TArray<FInventoryItemViewData> GetAllInventoryItems() const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  TArray<FInventoryItemViewData> GetStorageGridItems() const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool GetItemViewData(FGuid ItemId, FInventoryItemViewData &OutItemViewData) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool GetLoadoutItemViewData(EWeaponLoadoutSlot Slot,
+                              FInventoryItemViewData &OutItemViewData) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  FGuid GetLoadoutItemId(EWeaponLoadoutSlot Slot) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  TArray<FGuid> GetLoadoutItemIds() const { return LoadoutItemIds; }
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool CanMoveItemToGrid(FGuid ItemId, FIntPoint GridPosition,
+                         bool bRotated) const;
+
+  UFUNCTION(BlueprintCallable, Category = "Armory|Inventory")
+  bool MoveItemToGrid(FGuid ItemId, FIntPoint GridPosition, bool bRotated);
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool CanMoveItemToLoadout(FGuid ItemId, EWeaponLoadoutSlot Slot) const;
+
+  UFUNCTION(BlueprintCallable, Category = "Armory|Inventory")
+  bool MoveItemToLoadout(FGuid ItemId, EWeaponLoadoutSlot Slot);
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool CanRotateItem(FGuid ItemId) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool IsItemInStorageGrid(FGuid ItemId) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  bool IsItemRotated(FGuid ItemId) const;
+
+  UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
+  FIntPoint GetItemFootprint(FGuid ItemId, bool bRotated) const;
 
 protected:
   UFUNCTION()
@@ -106,20 +165,62 @@ private:
   UPROPERTY(Transient)
   int32 CachedCurrency = 0;
 
-  UPROPERTY(Transient)
-  TArray<TSubclassOf<AWeaponBase>> OwnedWeaponClasses;
+  UPROPERTY(EditDefaultsOnly, Category = "Armory|Inventory",
+            meta = (ClampMin = "1"))
+  int32 StorageGridWidth = 8;
+
+  UPROPERTY(EditDefaultsOnly, Category = "Armory|Inventory",
+            meta = (ClampMin = "1"))
+  int32 StorageGridHeight = 6;
 
   UPROPERTY(Transient)
-  TArray<TSubclassOf<AWeaponBase>> SlotAssignments;
+  TArray<FInventoryItemInstance> OwnedItems;
+
+  UPROPERTY(Transient)
+  TArray<FGuid> LoadoutItemIds;
 
   UPROPERTY(Transient)
   EWeaponLoadoutSlot ActiveSlot = EWeaponLoadoutSlot::Slot1Primary;
 
-  void EnsureSlotAssignmentsInitialized();
+  void EnsureLoadoutItemIdsInitialized();
   void BroadcastArmoryChanged();
   void BindCurrencyComponent(UCurrencyComponent *CurrencyComponent);
   void UnbindCurrencyComponent();
   bool IsWeaponAllowedInSlot(TSubclassOf<AWeaponBase> WeaponClass,
                              EWeaponLoadoutSlot Slot) const;
+  bool IsItemAllowedInLoadout(const FInventoryItemInstance &Item,
+                              EWeaponLoadoutSlot Slot) const;
   EWeaponLoadoutSlot FindFallbackActiveSlot() const;
+  FInventoryItemInstance *FindItemById(const FGuid &ItemId);
+  const FInventoryItemInstance *FindItemById(const FGuid &ItemId) const;
+  FInventoryItemInstance *FindWeaponItem(TSubclassOf<AWeaponBase> WeaponClass);
+  const FInventoryItemInstance *
+  FindWeaponItem(TSubclassOf<AWeaponBase> WeaponClass) const;
+  FIntPoint GetSanitizedFootprint(const FInventoryItemInstance &Item,
+                                  bool bRotated) const;
+  FInventoryItemViewData
+  BuildItemViewData(const FInventoryItemInstance &Item) const;
+  bool BuildWeaponItemInstance(TSubclassOf<AWeaponBase> WeaponClass,
+                               FInventoryItemInstance &OutItem) const;
+  bool CanPlaceInGrid(const FInventoryItemInstance &Item,
+                      const FInventoryGridPlacement &Placement,
+                      const FGuid &IgnoredItemId = FGuid(),
+                      const FGuid &AdditionalIgnoredItemId = FGuid()) const;
+  bool FindFirstFit(const FInventoryItemInstance &Item,
+                    FInventoryGridPlacement &OutPlacement,
+                    const FGuid &AdditionalIgnoredItemId = FGuid()) const;
+  void BuildOccupiedMask(TArray<bool> &OutMask,
+                         const FGuid &IgnoredItemId = FGuid(),
+                         const FGuid &AdditionalIgnoredItemId = FGuid()) const;
+  bool MoveItemToGridInternal(FInventoryItemInstance &Item,
+                              const FInventoryGridPlacement &Placement,
+                              const FGuid &AdditionalIgnoredItemId = FGuid());
+  bool MoveItemToLoadoutInternal(FInventoryItemInstance &Item,
+                                 EWeaponLoadoutSlot Slot);
+  bool RotatePlacement(const FInventoryItemInstance &Item,
+                       FInventoryGridPlacement &Placement) const;
+  bool CanRelocateLoadoutOccupantToStorage(
+      EWeaponLoadoutSlot Slot, const FGuid &IgnoredItemId = FGuid()) const;
+  bool RelocateLoadoutOccupantToStorage(EWeaponLoadoutSlot Slot,
+                                        const FGuid &IgnoredItemId = FGuid());
 };

@@ -39,6 +39,9 @@ struct PROJECT_API FWeaponShopOfferViewData {
   bool bAffordable = false;
 
   UPROPERTY(BlueprintReadOnly, Category = "Shop")
+  bool bFitsInInventory = false;
+
+  UPROPERTY(BlueprintReadOnly, Category = "Shop")
   bool bCanPurchase = false;
 };
 
@@ -81,6 +84,9 @@ public:
 
   UFUNCTION(BlueprintPure, Category = "Shop")
   bool CanPurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass, int32 Price) const;
+
+  UFUNCTION(BlueprintPure, Category = "Shop")
+  bool CanStoreWeapon(TSubclassOf<AWeaponBase> WeaponClass) const;
 
   UFUNCTION(BlueprintPure, Category = "Shop")
   bool CanAssignPendingWeaponToSlot(EWeaponLoadoutSlot LoadoutSlot) const;

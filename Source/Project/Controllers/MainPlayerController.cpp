@@ -110,8 +110,6 @@ void AMainPlayerController::SetupInputComponent() {
     BindInputActions();
 
     if (InputComponent) {
-      InputComponent->BindKey(EKeys::I, IE_Pressed, this,
-                              &AMainPlayerController::HandleInventoryToggleKey);
       InputComponent->BindKey(EKeys::Escape, IE_Pressed, this,
                               &AMainPlayerController::HandleCloseOverlayKey);
     }
@@ -603,8 +601,6 @@ void AMainPlayerController::HandleWeaponCycle(const FInputActionValue &Value) {
 void AMainPlayerController::HandleInventoryToggle(const FInputActionValue &Value) {
   ToggleInventory();
 }
-
-void AMainPlayerController::HandleInventoryToggleKey() { ToggleInventory(); }
 
 void AMainPlayerController::HandleCloseOverlayKey() {
   if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {

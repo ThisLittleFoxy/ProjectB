@@ -96,6 +96,15 @@ public:
   UFUNCTION(BlueprintPure, Category = "Weapon|UI")
   UTexture2D *GetWeaponIcon() const { return WeaponIcon; }
 
+  UFUNCTION(BlueprintPure, Category = "Weapon|Inventory")
+  float GetInventoryWeight() const { return InventoryWeight; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Inventory")
+  FIntPoint GetInventoryFootprint() const { return InventoryFootprint; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Inventory")
+  bool CanRotateInInventory() const { return bCanRotateInInventory; }
+
   UFUNCTION(BlueprintPure, Category = "Weapon|Damage")
   float GetDamageMultiplierForZone(EHitZone Zone) const;
 
@@ -139,6 +148,16 @@ protected:
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|UI")
   TObjectPtr<UTexture2D> WeaponIcon;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Inventory",
+            meta = (ClampMin = "0.0"))
+  float InventoryWeight = 1.0f;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Inventory")
+  FIntPoint InventoryFootprint = FIntPoint(1, 1);
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Inventory")
+  bool bCanRotateInInventory = false;
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Damage")
   TMap<EHitZone, float> DamageMultiplierByZone;
