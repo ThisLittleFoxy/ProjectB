@@ -6,7 +6,10 @@
 #include "Components/Border.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/World.h"
 #include "InputCoreTypes.h"
+#include "TimerManager.h"
+#include "UI/Armory/InventoryItemTooltipWidgetBase.h"
 #include "UI/Armory/PlayerInventoryWidgetBase.h"
 
 void UInventoryItemWidgetBase::NativeConstruct() {
@@ -14,6 +17,32 @@ void UInventoryItemWidgetBase::NativeConstruct() {
 
   CacheNamedWidgets();
   ApplyItemVisualState();
+}
+
+void UInventoryItemWidgetBase::NativeDestruct() {
+  ClearTooltip();
+  Super::NativeDestruct();
+}
+
+void UInventoryItemWidgetBase::NativeOnMouseEnter(
+    const FGeometry &InGeometry, const FPointerEvent &InMouseEvent) {
+  Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+
+  if (!bIsDragVisual && InventoryRoot) {
+    InventoryRoot->SetHoveredItem(ItemData.ItemId);
+    BeginTooltipDelay();
+  }
+}
+
+void UInventoryItemWidgetBase::NativeOnMouseLeave(
+    const FPointerEvent &InMouseEvent) {
+  if (!bIsDragVisual && InventoryRoot) {
+    InventoryRoot->ClearHoveredItem(ItemData.ItemId);
+  }
+
+  ClearTooltip();
+
+  Super::NativeOnMouseLeave(InMouseEvent);
 }
 
 FReply UInventoryItemWidgetBase::NativeOnMouseButtonDown(
@@ -36,17 +65,13 @@ void UInventoryItemWidgetBase::NativeOnDragDetected(
     return;
   }
 
+  ClearTooltip();
   InventoryRoot->BeginItemDrag(ItemData.ItemId);
 
   UDragDropOperation *Operation = UWidgetBlueprintLibrary::CreateDragDropOperation(
       UDragDropOperation::StaticClass());
   if (!Operation) {
     return;
-  }
-
-  if (UInventoryItemWidgetBase *DragVisual =
-          InventoryRoot->CreateInventoryItemWidget(ItemData, true)) {
-    Operation->DefaultDragVisual = DragVisual;
   }
 
   Operation->Pivot = EDragPivot::MouseDown;
@@ -96,6 +121,8 @@ void UInventoryItemWidgetBase::ApplyItemVisualState() {
                                               : ESlateVisibility::Collapsed);
   }
 
+  ClearTooltip();
+
   SetRenderOpacity(bIsDragVisual ? 0.9f : 1.0f);
   SetVisibility(bIsDragVisual ? ESlateVisibility::SelfHitTestInvisible
                               : ESlateVisibility::Visible);
@@ -112,4 +139,41 @@ void UInventoryItemWidgetBase::CacheNamedWidgets() {
   CachedRotateHintBorder =
       Cast<UBorder>(GetWidgetFromName(TEXT("Border_RotateHint")));
   bWidgetsCached = true;
+}
+
+void UInventoryItemWidgetBase::BeginTooltipDelay() {
+  ClearTooltip();
+
+  if (bIsDragVisual || !InventoryRoot) {
+    return;
+  }
+
+  if (UWorld *World = GetWorld()) {
+    World->GetTimerManager().SetTimer(
+        TooltipDelayTimerHandle, this, &UInventoryItemWidgetBase::ShowTooltip,
+        InventoryRoot->GetInventoryItemTooltipHoverDelay(), false);
+  }
+}
+
+void UInventoryItemWidgetBase::ShowTooltip() {
+  if (bIsDragVisual || !InventoryRoot) {
+    return;
+  }
+
+  if (UUserWidget *TooltipWidget =
+          InventoryRoot->CreateInventoryItemTooltipWidget(ItemData)) {
+    SetToolTip(TooltipWidget);
+    return;
+  }
+
+  SetToolTipText(InventoryRoot->GetInventoryItemTooltipText(ItemData));
+}
+
+void UInventoryItemWidgetBase::ClearTooltip() {
+  if (UWorld *World = GetWorld()) {
+    World->GetTimerManager().ClearTimer(TooltipDelayTimerHandle);
+  }
+
+  SetToolTip(nullptr);
+  SetToolTipText(FText::GetEmpty());
 }

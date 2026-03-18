@@ -125,6 +125,7 @@ protected:
   bool ShouldUseTouchControls() const;
   void BindInputActions();
   void ApplyStartupPawnState(APawn *InPawn);
+  void ApplyInventoryWidgetLayoutDefaults();
   void UpdateArmoryOverlayInputState();
   void CloseAllArmoryOverlays();
 

@@ -7,11 +7,15 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/UniformGridPanel.h"
+#include "Components/UniformGridSlot.h"
 #include "Controllers/MainPlayerController.h"
 #include "InputCoreTypes.h"
 #include "Inventory/PlayerArmoryComponent.h"
 #include "UI/Armory/InventoryItemWidgetBase.h"
+#include "UI/Armory/InventoryItemTooltipWidgetBase.h"
 #include "UI/Armory/LoadoutSlotWidgetBase.h"
 
 #define LOCTEXT_NAMESPACE "PlayerInventoryWidgetBase"
@@ -34,8 +38,14 @@ void UPlayerInventoryWidgetBase::NativeDestruct() {
 
 FReply UPlayerInventoryWidgetBase::NativeOnPreviewKeyDown(
     const FGeometry &InGeometry, const FKeyEvent &InKeyEvent) {
-  if (InKeyEvent.GetKey() == EKeys::R && ToggleDraggedItemRotation()) {
-    return FReply::Handled();
+  if (InKeyEvent.GetKey() == EKeys::R) {
+    if (HasDraggedItem() && ToggleDraggedItemRotation()) {
+      return FReply::Handled();
+    }
+
+    if (RotateHoveredItemInPlace()) {
+      return FReply::Handled();
+    }
   }
 
   return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
@@ -46,13 +56,13 @@ bool UPlayerInventoryWidgetBase::NativeOnDragOver(
     UDragDropOperation *InOperation) {
   InitializeNamedWidgets();
 
-  if (!HasDraggedItem() || !CachedGridBoundsWidget) {
+  if (!HasDraggedItem() || !CachedGridSizeBox) {
     HideGridPreview();
     return Super::NativeOnDragOver(InGeometry, InDragDropEvent, InOperation);
   }
 
   FIntPoint GridCell;
-  const FVector2D LocalPosition = CachedGridBoundsWidget->GetCachedGeometry().AbsoluteToLocal(
+  const FVector2D LocalPosition = CachedGridSizeBox->GetCachedGeometry().AbsoluteToLocal(
       InDragDropEvent.GetScreenSpacePosition());
   if (!TryGetGridCellFromLocalPosition(LocalPosition, DefaultCellSize, GridCell)) {
     HideGridPreview();
@@ -75,13 +85,13 @@ bool UPlayerInventoryWidgetBase::NativeOnDrop(
     UDragDropOperation *InOperation) {
   InitializeNamedWidgets();
 
-  if (!HasDraggedItem() || !CachedGridBoundsWidget) {
+  if (!HasDraggedItem() || !CachedGridSizeBox) {
     HideGridPreview();
     return false;
   }
 
   FIntPoint GridCell;
-  const FVector2D LocalPosition = CachedGridBoundsWidget->GetCachedGeometry().AbsoluteToLocal(
+  const FVector2D LocalPosition = CachedGridSizeBox->GetCachedGeometry().AbsoluteToLocal(
       InDragDropEvent.GetScreenSpacePosition());
   if (!TryGetGridCellFromLocalPosition(LocalPosition, DefaultCellSize, GridCell)) {
     HideGridPreview();
@@ -276,6 +286,15 @@ FText UPlayerInventoryWidgetBase::GetInventoryItemGridPositionText(
       FText::AsNumber(ItemViewData.GridPosition.Y));
 }
 
+FText UPlayerInventoryWidgetBase::GetInventoryItemTooltipText(
+    const FInventoryItemViewData &ItemViewData) const {
+  return FText::Format(
+      LOCTEXT("InventoryItemTooltipText", "{0}\nSize: {1}\nWeight: {2}"),
+      ItemViewData.DisplayName,
+      GetInventoryItemFootprintText(ItemViewData),
+      FText::AsNumber(ItemViewData.Weight));
+}
+
 bool UPlayerInventoryWidgetBase::TryGetGridCellFromLocalPosition(
     FVector2D LocalPosition, float CellSize, FIntPoint &OutGridCell) const {
   OutGridCell = FIntPoint(-1, -1);
@@ -416,6 +435,16 @@ void UPlayerInventoryWidgetBase::BeginItemDrag(FGuid ItemId) {
   bDraggedItemRotated = ItemViewData.bIsRotated;
 }
 
+void UPlayerInventoryWidgetBase::SetHoveredItem(FGuid ItemId) {
+  HoveredItemId = ItemId;
+}
+
+void UPlayerInventoryWidgetBase::ClearHoveredItem(FGuid ItemId) {
+  if (!ItemId.IsValid() || HoveredItemId == ItemId) {
+    HoveredItemId = FGuid();
+  }
+}
+
 void UPlayerInventoryWidgetBase::EndItemDrag() {
   DraggedItemId = FGuid();
   bDraggedItemRotated = false;
@@ -476,6 +505,8 @@ bool UPlayerInventoryWidgetBase::MoveDraggedItemToLoadout(
 
 void UPlayerInventoryWidgetBase::RebuildInventoryView() {
   InitializeNamedWidgets();
+  UpdateGridWidgetSize();
+  RebuildGridBackground();
   RefreshLoadoutSlots();
   RefreshStats();
   RefreshGridItems();
@@ -506,6 +537,25 @@ UInventoryItemWidgetBase *UPlayerInventoryWidgetBase::CreateInventoryItemWidget(
   return ItemWidget;
 }
 
+UInventoryItemTooltipWidgetBase *
+UPlayerInventoryWidgetBase::CreateInventoryItemTooltipWidget(
+    const FInventoryItemViewData &ItemViewData) const {
+  const TSubclassOf<UInventoryItemTooltipWidgetBase> WidgetClass =
+      ResolveInventoryItemTooltipWidgetClass();
+  if (!WidgetClass || !GetOwningPlayer()) {
+    return nullptr;
+  }
+
+  UInventoryItemTooltipWidgetBase *TooltipWidget =
+      CreateWidget<UInventoryItemTooltipWidgetBase>(GetOwningPlayer(), WidgetClass);
+  if (TooltipWidget) {
+    TooltipWidget->SetupTooltip(const_cast<UPlayerInventoryWidgetBase *>(this),
+                                ItemViewData);
+  }
+
+  return TooltipWidget;
+}
+
 void UPlayerInventoryWidgetBase::HandleWidgetRefreshRequested() {
   RebuildInventoryView();
 }
@@ -522,7 +572,9 @@ void UPlayerInventoryWidgetBase::InitializeNamedWidgets() {
       Cast<ULoadoutSlotWidgetBase>(GetWidgetFromName(TEXT("LoadoutSlot_2")));
   CachedLoadoutSlot3 =
       Cast<ULoadoutSlotWidgetBase>(GetWidgetFromName(TEXT("LoadoutSlot_3")));
-  CachedGridBoundsWidget = GetWidgetFromName(TEXT("SizeBox_Grid"));
+  CachedGridSizeBox = Cast<USizeBox>(GetWidgetFromName(TEXT("SizeBox_Grid")));
+  CachedGridBackgroundPanel = Cast<UUniformGridPanel>(
+      GetWidgetFromName(TEXT("UniformGridPanel_GridBackground")));
   CachedGridItemsCanvas =
       Cast<UCanvasPanel>(GetWidgetFromName(TEXT("CanvasPanel_GridItems")));
   CachedGridPreviewCanvas =
@@ -540,6 +592,55 @@ void UPlayerInventoryWidgetBase::InitializeNamedWidgets() {
   }
 
   bNamedWidgetsInitialized = true;
+}
+
+void UPlayerInventoryWidgetBase::UpdateGridWidgetSize() {
+  if (!CachedGridSizeBox) {
+    return;
+  }
+
+  const FVector2D GridPixelSize = GetStorageGridPixelSize(DefaultCellSize);
+  CachedGridSizeBox->SetWidthOverride(GridPixelSize.X);
+  CachedGridSizeBox->SetHeightOverride(GridPixelSize.Y);
+}
+
+void UPlayerInventoryWidgetBase::RebuildGridBackground() {
+  if (!CachedGridBackgroundPanel || !WidgetTree) {
+    return;
+  }
+
+  CachedGridBackgroundPanel->ClearChildren();
+
+  const int32 GridWidth = GetStorageGridWidth();
+  const int32 GridHeight = GetStorageGridHeight();
+  const float CellInset = FMath::Max(0.0f, GridCellInset);
+
+  for (int32 RowIndex = 0; RowIndex < GridHeight; ++RowIndex) {
+    for (int32 ColumnIndex = 0; ColumnIndex < GridWidth; ++ColumnIndex) {
+      UBorder *OutlineBorder = WidgetTree->ConstructWidget<UBorder>(
+          UBorder::StaticClass(), NAME_None);
+      if (!OutlineBorder) {
+        continue;
+      }
+
+      OutlineBorder->SetBrushColor(GridCellOutlineColor);
+      OutlineBorder->SetPadding(FMargin(CellInset));
+
+      UBorder *FillBorder = WidgetTree->ConstructWidget<UBorder>(
+          UBorder::StaticClass(), NAME_None);
+      if (FillBorder) {
+        FillBorder->SetBrushColor(GridCellFillColor);
+        OutlineBorder->SetContent(FillBorder);
+      }
+
+      if (UUniformGridSlot *GridSlot =
+              CachedGridBackgroundPanel->AddChildToUniformGrid(
+                  OutlineBorder, RowIndex, ColumnIndex)) {
+        GridSlot->SetHorizontalAlignment(HAlign_Fill);
+        GridSlot->SetVerticalAlignment(VAlign_Fill);
+      }
+    }
+  }
 }
 
 void UPlayerInventoryWidgetBase::EnsurePreviewBorderCreated() {
@@ -610,6 +711,26 @@ void UPlayerInventoryWidgetBase::RefreshGridItems() {
   }
 }
 
+bool UPlayerInventoryWidgetBase::RotateHoveredItemInPlace() {
+  if (!HoveredItemId.IsValid() || HasDraggedItem()) {
+    return false;
+  }
+
+  FInventoryItemViewData ItemViewData;
+  if (!GetItemViewData(HoveredItemId, ItemViewData) ||
+      ItemViewData.Container != EInventoryItemContainer::StorageGrid ||
+      !ItemViewData.bCanRotate) {
+    return false;
+  }
+
+  const bool bTargetRotated = !ItemViewData.bIsRotated;
+  if (!CanMoveItemToGrid(HoveredItemId, ItemViewData.GridPosition, bTargetRotated)) {
+    return false;
+  }
+
+  return MoveItemToGrid(HoveredItemId, ItemViewData.GridPosition, bTargetRotated);
+}
+
 void UPlayerInventoryWidgetBase::HideGridPreview() {
   if (CachedGridPreviewBorder) {
     CachedGridPreviewBorder->SetVisibility(ESlateVisibility::Hidden);
@@ -645,6 +766,18 @@ UPlayerInventoryWidgetBase::ResolveInventoryItemWidgetClass() const {
       nullptr,
       TEXT(
           "/Game/UI/Inventory_Asset/Assets/WBP_InventoryItem.WBP_InventoryItem_C"));
+}
+
+TSubclassOf<UInventoryItemTooltipWidgetBase>
+UPlayerInventoryWidgetBase::ResolveInventoryItemTooltipWidgetClass() const {
+  if (InventoryItemTooltipWidgetClass) {
+    return InventoryItemTooltipWidgetClass;
+  }
+
+  return LoadClass<UInventoryItemTooltipWidgetBase>(
+      nullptr,
+      TEXT(
+          "/Game/UI/Inventory_Asset/Assets/WBP_ItemTooltip.WBP_ItemTooltip_C"));
 }
 
 #undef LOCTEXT_NAMESPACE

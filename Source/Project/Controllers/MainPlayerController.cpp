@@ -40,6 +40,8 @@ AMainPlayerController::AMainPlayerController() {
 void AMainPlayerController::BeginPlay() {
   Super::BeginPlay();
 
+  ApplyInventoryWidgetLayoutDefaults();
+
   UE_LOG(LogProject, Log,
          TEXT("MainPlayerController::BeginPlay - Controller: %s"), *GetName());
   UE_LOG(LogProject, Log, TEXT("IsLocalPlayerController: %s"),
@@ -256,6 +258,7 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
     return;
   }
 
+  ApplyInventoryWidgetLayoutDefaults();
   PlayerArmoryComponent->BindToPawn(InPawn);
 
   if (bApplyStartupPawnStateOnlyOnce && bHasAppliedStartupPawnState) {
@@ -283,6 +286,22 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
 
 bool AMainPlayerController::ShouldUseTouchControls() const {
   return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
+}
+
+void AMainPlayerController::ApplyInventoryWidgetLayoutDefaults() {
+  if (!PlayerArmoryComponent || !InventoryWidgetClass) {
+    return;
+  }
+
+  const UPlayerInventoryWidgetBase *InventoryWidgetDefaults =
+      InventoryWidgetClass->GetDefaultObject<UPlayerInventoryWidgetBase>();
+  if (!InventoryWidgetDefaults) {
+    return;
+  }
+
+  PlayerArmoryComponent->SetStorageGridDimensions(
+      InventoryWidgetDefaults->GetConfiguredStorageGridColumns(),
+      InventoryWidgetDefaults->GetConfiguredStorageGridRows());
 }
 
 void AMainPlayerController::UpdateArmoryOverlayInputState() {
@@ -339,6 +358,8 @@ void AMainPlayerController::OpenInventory() {
   if (!IsLocalPlayerController() || !InventoryWidgetClass) {
     return;
   }
+
+  ApplyInventoryWidgetLayoutDefaults();
 
   if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
     WeaponShopWidget->RemoveFromParent();

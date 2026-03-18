@@ -7,7 +7,6 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "InputCoreTypes.h"
-#include "UI/Armory/InventoryItemWidgetBase.h"
 #include "UI/Armory/PlayerInventoryWidgetBase.h"
 
 void ULoadoutSlotWidgetBase::NativeConstruct() {
@@ -44,11 +43,6 @@ void ULoadoutSlotWidgetBase::NativeOnDragDetected(
       UDragDropOperation::StaticClass());
   if (!Operation) {
     return;
-  }
-
-  if (UInventoryItemWidgetBase *DragVisual =
-          InventoryRoot->CreateInventoryItemWidget(SlotItemData, true)) {
-    Operation->DefaultDragVisual = DragVisual;
   }
 
   Operation->Pivot = EDragPivot::MouseDown;

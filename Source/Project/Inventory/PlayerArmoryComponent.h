@@ -91,6 +91,9 @@ public:
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
   int32 GetStorageGridHeight() const { return FMath::Max(1, StorageGridHeight); }
 
+  UFUNCTION(BlueprintCallable, Category = "Armory|Inventory")
+  void SetStorageGridDimensions(int32 NewGridWidth, int32 NewGridHeight);
+
   UFUNCTION(BlueprintPure, Category = "Armory|Inventory")
   int32 GetTotalGridCells() const;
 

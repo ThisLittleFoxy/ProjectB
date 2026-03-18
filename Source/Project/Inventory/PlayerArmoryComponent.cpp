@@ -7,10 +7,6 @@
 #include "GameFramework/Pawn.h"
 
 namespace {
-bool IsValidLoadoutSlotIndex(int32 SlotIndex) {
-  return SlotIndex >= 0 && SlotIndex < ProjectWeaponLoadout::SlotCount;
-}
-
 int32 MakeGridCellIndex(const FIntPoint &Cell, int32 GridWidth) {
   return (Cell.Y * GridWidth) + Cell.X;
 }
@@ -270,6 +266,28 @@ bool UPlayerArmoryComponent::SetActiveSlot(EWeaponLoadoutSlot Slot) {
 
 int32 UPlayerArmoryComponent::GetTotalGridCells() const {
   return GetStorageGridWidth() * GetStorageGridHeight();
+}
+
+void UPlayerArmoryComponent::SetStorageGridDimensions(int32 NewGridWidth,
+                                                      int32 NewGridHeight) {
+  const int32 SanitizedGridWidth = FMath::Max(1, NewGridWidth);
+  const int32 SanitizedGridHeight = FMath::Max(1, NewGridHeight);
+
+  if (StorageGridWidth == SanitizedGridWidth &&
+      StorageGridHeight == SanitizedGridHeight) {
+    return;
+  }
+
+  if (OwnedItems.Num() > 0) {
+    return;
+  }
+
+  StorageGridWidth = SanitizedGridWidth;
+  StorageGridHeight = SanitizedGridHeight;
+
+  if (bHasInitializedSessionState) {
+    BroadcastArmoryChanged();
+  }
 }
 
 int32 UPlayerArmoryComponent::GetUsedGridCells() const {

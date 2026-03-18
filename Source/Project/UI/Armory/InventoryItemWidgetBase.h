@@ -4,6 +4,7 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Inventory/InventoryItemTypes.h"
+#include "TimerManager.h"
 #include "InventoryItemWidgetBase.generated.h"
 
 class UBorder;
@@ -18,6 +19,10 @@ class PROJECT_API UInventoryItemWidgetBase : public UUserWidget {
 
 public:
   virtual void NativeConstruct() override;
+  virtual void NativeDestruct() override;
+  virtual void NativeOnMouseEnter(const FGeometry &InGeometry,
+                                  const FPointerEvent &InMouseEvent) override;
+  virtual void NativeOnMouseLeave(const FPointerEvent &InMouseEvent) override;
   virtual FReply NativeOnMouseButtonDown(
       const FGeometry &InGeometry,
       const FPointerEvent &InMouseEvent) override;
@@ -52,6 +57,9 @@ protected:
 private:
   void ApplyItemVisualState();
   void CacheNamedWidgets();
+  void BeginTooltipDelay();
+  void ShowTooltip();
+  void ClearTooltip();
 
   UPROPERTY(Transient)
   TObjectPtr<UImage> CachedIconImage;
@@ -65,5 +73,6 @@ private:
   UPROPERTY(Transient)
   TObjectPtr<UBorder> CachedRotateHintBorder;
 
+  FTimerHandle TooltipDelayTimerHandle;
   bool bWidgetsCached = false;
 };

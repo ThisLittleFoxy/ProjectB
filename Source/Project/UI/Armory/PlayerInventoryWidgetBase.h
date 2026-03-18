@@ -12,8 +12,11 @@ class UButton;
 class UCanvasPanel;
 class UDragDropOperation;
 class UInventoryItemWidgetBase;
+class UInventoryItemTooltipWidgetBase;
 class ULoadoutSlotWidgetBase;
+class USizeBox;
 class UTextBlock;
+class UUniformGridPanel;
 class UUserWidget;
 class UWidget;
 
@@ -87,6 +90,16 @@ public:
   FVector2D GetStorageGridPixelSize(float CellSize) const;
 
   UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
+  int32 GetConfiguredStorageGridColumns() const {
+    return FMath::Max(1, StorageGridColumns);
+  }
+
+  UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
+  int32 GetConfiguredStorageGridRows() const {
+    return FMath::Max(1, StorageGridRows);
+  }
+
+  UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
   FVector2D GetGridCellCanvasPosition(FIntPoint GridCell, float CellSize) const;
 
   UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
@@ -107,6 +120,15 @@ public:
   UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
   FText GetInventoryItemGridPositionText(
       const FInventoryItemViewData &ItemViewData) const;
+
+  UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
+  FText GetInventoryItemTooltipText(
+      const FInventoryItemViewData &ItemViewData) const;
+
+  UFUNCTION(BlueprintPure, Category = "Inventory|Tooltip")
+  float GetInventoryItemTooltipHoverDelay() const {
+    return FMath::Max(0.0f, InventoryItemTooltipHoverDelay);
+  }
 
   UFUNCTION(BlueprintPure, Category = "Inventory|Layout")
   bool TryGetGridCellFromLocalPosition(FVector2D LocalPosition, float CellSize,
@@ -154,6 +176,12 @@ public:
   void BeginItemDrag(FGuid ItemId);
 
   UFUNCTION(BlueprintCallable, Category = "Inventory")
+  void SetHoveredItem(FGuid ItemId);
+
+  UFUNCTION(BlueprintCallable, Category = "Inventory")
+  void ClearHoveredItem(FGuid ItemId);
+
+  UFUNCTION(BlueprintCallable, Category = "Inventory")
   void EndItemDrag();
 
   UFUNCTION(BlueprintCallable, Category = "Inventory")
@@ -190,12 +218,33 @@ public:
   CreateInventoryItemWidget(const FInventoryItemViewData &ItemViewData,
                             bool bIsDragVisual) const;
 
+  UInventoryItemTooltipWidgetBase *CreateInventoryItemTooltipWidget(
+      const FInventoryItemViewData &ItemViewData) const;
+
 protected:
   virtual void HandleWidgetRefreshRequested() override;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout",
             meta = (ClampMin = "1.0"))
   float DefaultCellSize = 72.0f;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout",
+            meta = (ClampMin = "1"))
+  int32 StorageGridColumns = 8;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout",
+            meta = (ClampMin = "1"))
+  int32 StorageGridRows = 6;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout",
+            meta = (ClampMin = "0.0"))
+  float GridCellInset = 1.0f;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout")
+  FLinearColor GridCellFillColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.03f);
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout")
+  FLinearColor GridCellOutlineColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.08f);
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Layout")
   FLinearColor PreviewValidColor = FLinearColor(0.15f, 0.8f, 0.35f, 0.35f);
@@ -206,6 +255,13 @@ protected:
   UPROPERTY(EditAnywhere, Category = "Inventory|Layout")
   TSubclassOf<UInventoryItemWidgetBase> InventoryItemWidgetClass;
 
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Tooltip",
+            meta = (ClampMin = "0.0"))
+  float InventoryItemTooltipHoverDelay = 0.35f;
+
+  UPROPERTY(EditAnywhere, Category = "Inventory|Tooltip")
+  TSubclassOf<UInventoryItemTooltipWidgetBase> InventoryItemTooltipWidgetClass;
+
 private:
   UFUNCTION()
   void HandleCloseButtonClicked();
@@ -213,12 +269,17 @@ private:
   void InitializeNamedWidgets();
   void EnsurePreviewBorderCreated();
   void RebuildInventoryView();
+  void UpdateGridWidgetSize();
+  void RebuildGridBackground();
   void RefreshStats();
   void RefreshLoadoutSlots();
   void RefreshGridItems();
+  bool RotateHoveredItemInPlace();
   void HideGridPreview();
   void ShowGridPreview(FIntPoint GridCell, bool bIsValidDrop);
   TSubclassOf<UInventoryItemWidgetBase> ResolveInventoryItemWidgetClass() const;
+  TSubclassOf<UInventoryItemTooltipWidgetBase>
+  ResolveInventoryItemTooltipWidgetClass() const;
 
   UPROPERTY(Transient)
   TObjectPtr<UTextBlock> CachedWeightText;
@@ -239,7 +300,10 @@ private:
   TObjectPtr<ULoadoutSlotWidgetBase> CachedLoadoutSlot3;
 
   UPROPERTY(Transient)
-  TObjectPtr<UWidget> CachedGridBoundsWidget;
+  TObjectPtr<USizeBox> CachedGridSizeBox;
+
+  UPROPERTY(Transient)
+  TObjectPtr<UUniformGridPanel> CachedGridBackgroundPanel;
 
   UPROPERTY(Transient)
   TObjectPtr<UCanvasPanel> CachedGridItemsCanvas;
@@ -258,4 +322,7 @@ private:
 
   UPROPERTY(Transient)
   bool bDraggedItemRotated = false;
+
+  UPROPERTY(Transient)
+  FGuid HoveredItemId;
 };
