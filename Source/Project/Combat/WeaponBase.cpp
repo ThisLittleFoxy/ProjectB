@@ -342,6 +342,19 @@ bool AWeaponBase::Reload() {
   return AmmoToLoad > 0;
 }
 
+FWeaponAmmoSaveData AWeaponBase::GetAmmoSaveData() const {
+  FWeaponAmmoSaveData AmmoSaveData;
+  AmmoSaveData.AmmoInMagazine = CurrentAmmoInMagazine;
+  AmmoSaveData.ReserveAmmo = ReserveAmmo;
+  return AmmoSaveData;
+}
+
+void AWeaponBase::ApplyAmmoSaveData(const FWeaponAmmoSaveData &AmmoSaveData) {
+  CurrentAmmoInMagazine =
+      FMath::Clamp(AmmoSaveData.AmmoInMagazine, 0, FMath::Max(1, MagazineSize));
+  ReserveAmmo = FMath::Max(0, AmmoSaveData.ReserveAmmo);
+}
+
 float AWeaponBase::GetTimeBetweenShots() const {
   return 60.0f / FMath::Max(FireRateRpm, 1.0f);
 }

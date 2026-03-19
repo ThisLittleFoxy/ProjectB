@@ -53,6 +53,17 @@ float UHealthComponent::ApplyHealing(float HealAmount) {
 
 void UHealthComponent::RestoreFullHealth() { SetHealth(MaxHealth); }
 
+void UHealthComponent::RestoreHealthFromSave(float SavedHealth) {
+  AActor *OwnerActor = GetOwner();
+  if (OwnerActor && SavedHealth > 0.0f) {
+    OwnerActor->SetActorHiddenInGame(false);
+    OwnerActor->SetActorEnableCollision(true);
+    OwnerActor->SetCanBeDamaged(true);
+  }
+
+  SetHealth(SavedHealth);
+}
+
 float UHealthComponent::GetHealthPercent() const {
   if (MaxHealth <= KINDA_SMALL_NUMBER) {
     return 0.0f;

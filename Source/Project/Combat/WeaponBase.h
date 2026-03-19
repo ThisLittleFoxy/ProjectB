@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
+#include "Save/WeaponAmmoSaveData.h"
 #include "WeaponBase.generated.h"
 
 class APawn;
@@ -62,6 +63,12 @@ public:
 
   UFUNCTION(BlueprintPure, Category = "Weapon|Ammo")
   int32 GetReserveAmmo() const { return ReserveAmmo; }
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Ammo")
+  FWeaponAmmoSaveData GetAmmoSaveData() const;
+
+  UFUNCTION(BlueprintCallable, Category = "Weapon|Ammo")
+  void ApplyAmmoSaveData(const FWeaponAmmoSaveData &AmmoSaveData);
 
   UFUNCTION(BlueprintPure, Category = "Weapon|Ammo")
   int32 GetMagazineSize() const { return MagazineSize; }

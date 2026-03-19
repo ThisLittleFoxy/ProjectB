@@ -53,6 +53,9 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Health")
   void RestoreFullHealth();
 
+  UFUNCTION(BlueprintCallable, Category = "Health")
+  void RestoreHealthFromSave(float SavedHealth);
+
   UFUNCTION(BlueprintPure, Category = "Health")
   float GetCurrentHealth() const { return CurrentHealth; }
 

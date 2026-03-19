@@ -5,6 +5,7 @@
 #include "Combat/WeaponLoadoutTypes.h"
 #include "Components/ActorComponent.h"
 #include "Inventory/InventoryItemTypes.h"
+#include "Save/ProjectSaveTypes.h"
 #include "PlayerArmoryComponent.generated.h"
 
 class APawn;
@@ -40,6 +41,12 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Armory|Session")
   void ApplyStateToBoundPawn();
+
+  UFUNCTION(BlueprintCallable, Category = "Armory|Save")
+  void CaptureSaveData(FPlayerSaveData &OutPlayerSaveData);
+
+  UFUNCTION(BlueprintCallable, Category = "Armory|Save")
+  void RestoreFromSaveData(const FPlayerSaveData &PlayerSaveData);
 
   UFUNCTION(BlueprintPure, Category = "Armory|Currency")
   int32 GetCurrency() const { return CachedCurrency; }
@@ -189,6 +196,7 @@ private:
   void BroadcastArmoryChanged();
   void BindCurrencyComponent(UCurrencyComponent *CurrencyComponent);
   void UnbindCurrencyComponent();
+  void SyncRuntimeWeaponStateFromBoundPawn();
   bool IsWeaponAllowedInSlot(TSubclassOf<AWeaponBase> WeaponClass,
                              EWeaponLoadoutSlot Slot) const;
   bool IsItemAllowedInLoadout(const FInventoryItemInstance &Item,
@@ -205,6 +213,8 @@ private:
   BuildItemViewData(const FInventoryItemInstance &Item) const;
   bool BuildWeaponItemInstance(TSubclassOf<AWeaponBase> WeaponClass,
                                FInventoryItemInstance &OutItem) const;
+  bool BuildInventoryItemFromSaveData(const FArmoryItemSaveData &ItemSaveData,
+                                      FInventoryItemInstance &OutItem) const;
   bool CanPlaceInGrid(const FInventoryItemInstance &Item,
                       const FInventoryGridPlacement &Placement,
                       const FGuid &IgnoredItemId = FGuid(),

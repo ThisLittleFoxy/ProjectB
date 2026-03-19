@@ -18,6 +18,7 @@
 #include "Interaction/WeaponShopTerminal.h"
 #include "Inventory/PlayerArmoryComponent.h"
 #include "Project.h"
+#include "Save/ProjectSaveSubsystem.h"
 #include "TimerManager.h"
 #include "UI/Armory/PlayerInventoryWidgetBase.h"
 #include "UI/Armory/WeaponShopWidgetBase.h"
@@ -184,6 +185,17 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
             &AMainPlayerController::HandleInventoryToggle);
+      } else if (ActionName.Contains(TEXT("SaveLoad")) ||
+                 ActionName.Contains(TEXT("QuickLoad"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleQuickLoad);
+      } else if (ActionName.Contains(TEXT("IA_Save")) ||
+                 ActionName.Contains(TEXT("QuickSave")) ||
+                 ActionName.Equals(TEXT("Save"))) {
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleQuickSave);
       } else if (ActionName.Contains(TEXT("Fire")) ||
                  ActionName.Contains(TEXT("IA_Fire"))) {
         EnhancedInputComponent->BindAction(
@@ -254,12 +266,36 @@ void AMainPlayerController::OnPossess(APawn *InPawn) {
 }
 
 void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
-  if (!InPawn || !bApplyStartupPawnStateOnPossess || !PlayerArmoryComponent) {
+  if (!InPawn || !PlayerArmoryComponent) {
     return;
   }
 
   ApplyInventoryWidgetLayoutDefaults();
   PlayerArmoryComponent->BindToPawn(InPawn);
+
+  if (bSkipNextStartupPawnStateApplication) {
+    ConsumeSaveRestoreStartupSkip();
+    return;
+  }
+
+  if (const UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    if (SaveSubsystem->HasPendingRestore()) {
+      if (UWorld *World = GetWorld()) {
+        TWeakObjectPtr<APawn> WeakPawn = InPawn;
+        World->GetTimerManager().SetTimerForNextTick(
+            FTimerDelegate::CreateWeakLambda(this, [this, WeakPawn]() {
+              ApplyStartupPawnState(WeakPawn.Get());
+            }));
+      }
+      return;
+    }
+  }
+
+  if (!bApplyStartupPawnStateOnPossess) {
+    return;
+  }
 
   if (bApplyStartupPawnStateOnlyOnce && bHasAppliedStartupPawnState) {
     return;
@@ -281,6 +317,11 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
   }
 
   PlayerArmoryComponent->InitializeEmptySession(InitialCurrency);
+  bHasAppliedStartupPawnState = true;
+}
+
+void AMainPlayerController::ConsumeSaveRestoreStartupSkip() {
+  bSkipNextStartupPawnStateApplication = false;
   bHasAppliedStartupPawnState = true;
 }
 
@@ -623,6 +664,14 @@ void AMainPlayerController::HandleInventoryToggle(const FInputActionValue &Value
   ToggleInventory();
 }
 
+void AMainPlayerController::HandleQuickSave(const FInputActionValue &Value) {
+  RequestQuickSave();
+}
+
+void AMainPlayerController::HandleQuickLoad(const FInputActionValue &Value) {
+  RequestQuickLoad();
+}
+
 void AMainPlayerController::HandleCloseOverlayKey() {
   if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
     CloseWeaponShop();
@@ -643,6 +692,11 @@ void AMainPlayerController::ResetStartupPawnStateTracking() {
   bHasAppliedStartupPawnState = false;
 }
 
+void AMainPlayerController::MarkStartupStateRestoredFromSave() {
+  bSkipNextStartupPawnStateApplication = true;
+  bHasAppliedStartupPawnState = true;
+}
+
 void AMainPlayerController::SetMouseCursorVisible(bool bVisible) {
   bShowMouseCursor = bVisible;
   bIsInteractingWithUI = bVisible;
@@ -656,4 +710,44 @@ void AMainPlayerController::SetMouseCursorVisible(bool bVisible) {
     FInputModeGameOnly InputMode;
     SetInputMode(InputMode);
   }
+}
+
+bool AMainPlayerController::RequestQuickSave() {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->QuickSave();
+  }
+
+  return false;
+}
+
+bool AMainPlayerController::RequestQuickLoad() {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->QuickLoad();
+  }
+
+  return false;
+}
+
+bool AMainPlayerController::RequestManualSave() {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->ManualSave();
+  }
+
+  return false;
+}
+
+bool AMainPlayerController::RequestManualLoad() {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->ManualLoad();
+  }
+
+  return false;
 }

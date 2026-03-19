@@ -48,6 +48,18 @@ public:
   UFUNCTION(BlueprintCallable, Category = "UI|Armory")
   void SetExternalArmoryOverlayOpen(bool bIsOpen);
 
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestQuickSave();
+
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestQuickLoad();
+
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestManualSave();
+
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestManualLoad();
+
 protected:
   UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
   TArray<UInputMappingContext *> DefaultMappingContexts;
@@ -118,6 +130,9 @@ protected:
   UPROPERTY(Transient)
   bool bHasAppliedStartupPawnState = false;
 
+  UPROPERTY(Transient)
+  bool bSkipNextStartupPawnStateApplication = false;
+
   virtual void BeginPlay() override;
   virtual void SetupInputComponent() override;
   virtual void OnPossess(APawn *InPawn) override;
@@ -125,6 +140,7 @@ protected:
   bool ShouldUseTouchControls() const;
   void BindInputActions();
   void ApplyStartupPawnState(APawn *InPawn);
+  void ConsumeSaveRestoreStartupSkip();
   void ApplyInventoryWidgetLayoutDefaults();
   void UpdateArmoryOverlayInputState();
   void CloseAllArmoryOverlays();
@@ -170,6 +186,13 @@ protected:
 
   UFUNCTION()
   void HandleInventoryToggle(const FInputActionValue &Value);
+
+  UFUNCTION()
+  void HandleQuickSave(const FInputActionValue &Value);
+
+  UFUNCTION()
+  void HandleQuickLoad(const FInputActionValue &Value);
+
   void HandleCloseOverlayKey();
 
   UPROPERTY(EditAnywhere, Category = "Input|Combat", meta = (ClampMin = "0.0"))
@@ -184,6 +207,9 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")
   void ResetStartupPawnStateTracking();
+
+  UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")
+  void MarkStartupStateRestoredFromSave();
 
   UFUNCTION(BlueprintCallable, Category = "UI")
   void SetMouseCursorVisible(bool bVisible);

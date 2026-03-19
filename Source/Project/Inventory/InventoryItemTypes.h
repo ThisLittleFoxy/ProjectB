@@ -70,6 +70,14 @@ struct PROJECT_API FInventoryItemInstance {
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
   EWeaponLoadoutSlot LoadoutSlot = EWeaponLoadoutSlot::Slot1Primary;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Ammo",
+            meta = (ClampMin = "0"))
+  int32 CurrentAmmoInMagazine = 0;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Ammo",
+            meta = (ClampMin = "0"))
+  int32 ReserveAmmo = 0;
 };
 
 USTRUCT(BlueprintType)

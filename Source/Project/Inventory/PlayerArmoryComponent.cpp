@@ -5,6 +5,7 @@
 #include "Combat/CombatComponent.h"
 #include "Combat/WeaponBase.h"
 #include "GameFramework/Pawn.h"
+#include "Project.h"
 
 namespace {
 int32 MakeGridCellIndex(const FIntPoint &Cell, int32 GridWidth) {
@@ -88,6 +89,14 @@ void UPlayerArmoryComponent::ApplyStateToBoundPawn() {
 
     BoundCombatComponent->SetWeaponForSlot(
         static_cast<EWeaponLoadoutSlot>(SlotIndex), AssignedItem->WeaponClass);
+
+    if (AWeaponBase *SpawnedWeapon = BoundCombatComponent->GetWeaponInSlot(
+            static_cast<EWeaponLoadoutSlot>(SlotIndex))) {
+      FWeaponAmmoSaveData AmmoSaveData;
+      AmmoSaveData.AmmoInMagazine = AssignedItem->CurrentAmmoInMagazine;
+      AmmoSaveData.ReserveAmmo = AssignedItem->ReserveAmmo;
+      SpawnedWeapon->ApplyAmmoSaveData(AmmoSaveData);
+    }
   }
 
   const EWeaponLoadoutSlot DesiredActiveSlot =
@@ -97,6 +106,69 @@ void UPlayerArmoryComponent::ApplyStateToBoundPawn() {
     BoundCombatComponent->SetActiveLoadoutSlot(DesiredActiveSlot);
   }
 
+  BroadcastArmoryChanged();
+}
+
+void UPlayerArmoryComponent::CaptureSaveData(FPlayerSaveData &OutPlayerSaveData) {
+  SyncRuntimeWeaponStateFromBoundPawn();
+
+  OutPlayerSaveData.Currency = CachedCurrency;
+  OutPlayerSaveData.StorageGridWidth = GetStorageGridWidth();
+  OutPlayerSaveData.StorageGridHeight = GetStorageGridHeight();
+  OutPlayerSaveData.ActiveSlot = ActiveSlot;
+  OutPlayerSaveData.ArmoryItems.Reset();
+  OutPlayerSaveData.ArmoryItems.Reserve(OwnedItems.Num());
+
+  for (const FInventoryItemInstance &Item : OwnedItems) {
+    FArmoryItemSaveData ItemSaveData;
+    ItemSaveData.ItemId = Item.ItemId;
+    ItemSaveData.WeaponClass = Item.WeaponClass;
+    ItemSaveData.Container = Item.Container;
+    ItemSaveData.GridPlacement = Item.GridPlacement;
+    ItemSaveData.LoadoutSlot = Item.LoadoutSlot;
+    ItemSaveData.AmmoData.AmmoInMagazine = Item.CurrentAmmoInMagazine;
+    ItemSaveData.AmmoData.ReserveAmmo = Item.ReserveAmmo;
+    OutPlayerSaveData.ArmoryItems.Add(MoveTemp(ItemSaveData));
+  }
+}
+
+void UPlayerArmoryComponent::RestoreFromSaveData(
+    const FPlayerSaveData &PlayerSaveData) {
+  EnsureLoadoutItemIdsInitialized();
+
+  bHasInitializedSessionState = true;
+  CachedCurrency = FMath::Max(0, PlayerSaveData.Currency);
+  StorageGridWidth = FMath::Max(1, PlayerSaveData.StorageGridWidth);
+  StorageGridHeight = FMath::Max(1, PlayerSaveData.StorageGridHeight);
+  ActiveSlot = PlayerSaveData.ActiveSlot;
+
+  OwnedItems.Reset();
+  for (FGuid &LoadoutItemId : LoadoutItemIds) {
+    LoadoutItemId = FGuid();
+  }
+
+  for (const FArmoryItemSaveData &ItemSaveData : PlayerSaveData.ArmoryItems) {
+    FInventoryItemInstance RestoredItem;
+    if (!BuildInventoryItemFromSaveData(ItemSaveData, RestoredItem)) {
+      continue;
+    }
+
+    if (RestoredItem.Container == EInventoryItemContainer::LoadoutSlot) {
+      const int32 SlotIndex =
+          ProjectWeaponLoadout::ToIndex(static_cast<uint8>(RestoredItem.LoadoutSlot));
+      if (LoadoutItemIds.IsValidIndex(SlotIndex)) {
+        LoadoutItemIds[SlotIndex] = RestoredItem.ItemId;
+      }
+    }
+
+    OwnedItems.Add(MoveTemp(RestoredItem));
+  }
+
+  if (!IsSlotOccupied(ActiveSlot)) {
+    ActiveSlot = FindFallbackActiveSlot();
+  }
+
+  ApplyStateToBoundPawn();
   BroadcastArmoryChanged();
 }
 
@@ -491,6 +563,32 @@ void UPlayerArmoryComponent::UnbindCurrencyComponent() {
   }
 }
 
+void UPlayerArmoryComponent::SyncRuntimeWeaponStateFromBoundPawn() {
+  if (!BoundCombatComponent.IsValid()) {
+    BoundCombatComponent = BoundPawn.IsValid()
+                               ? BoundPawn->FindComponentByClass<UCombatComponent>()
+                               : nullptr;
+  }
+
+  if (!BoundCombatComponent.IsValid()) {
+    return;
+  }
+
+  for (int32 SlotIndex = 0; SlotIndex < LoadoutItemIds.Num(); ++SlotIndex) {
+    FInventoryItemInstance *AssignedItem = FindItemById(LoadoutItemIds[SlotIndex]);
+    if (!AssignedItem) {
+      continue;
+    }
+
+    if (AWeaponBase *Weapon = BoundCombatComponent->GetWeaponInSlot(
+            static_cast<EWeaponLoadoutSlot>(SlotIndex))) {
+      const FWeaponAmmoSaveData AmmoSaveData = Weapon->GetAmmoSaveData();
+      AssignedItem->CurrentAmmoInMagazine = AmmoSaveData.AmmoInMagazine;
+      AssignedItem->ReserveAmmo = AmmoSaveData.ReserveAmmo;
+    }
+  }
+}
+
 bool UPlayerArmoryComponent::IsWeaponAllowedInSlot(
     TSubclassOf<AWeaponBase> WeaponClass, EWeaponLoadoutSlot Slot) const {
   if (!WeaponClass) {
@@ -657,6 +755,32 @@ bool UPlayerArmoryComponent::BuildWeaponItemInstance(
   OutItem.bCanRotate = WeaponCDO->CanRotateInInventory();
   OutItem.GridPlacement = FInventoryGridPlacement();
   OutItem.LoadoutSlot = EWeaponLoadoutSlot::Slot1Primary;
+  OutItem.CurrentAmmoInMagazine = WeaponCDO->GetAmmoInMagazine();
+  OutItem.ReserveAmmo = WeaponCDO->GetReserveAmmo();
+  return OutItem.ItemId.IsValid();
+}
+
+bool UPlayerArmoryComponent::BuildInventoryItemFromSaveData(
+    const FArmoryItemSaveData &ItemSaveData, FInventoryItemInstance &OutItem) const {
+  UClass *LoadedWeaponClass = ItemSaveData.WeaponClass.Get();
+  TSubclassOf<AWeaponBase> WeaponClass = LoadedWeaponClass;
+  if (!WeaponClass) {
+    UE_LOG(LogProject, Warning,
+           TEXT("PlayerArmoryComponent: failed to resolve weapon class for saved item '%s'"),
+           *ItemSaveData.ItemId.ToString());
+    return false;
+  }
+
+  if (!BuildWeaponItemInstance(WeaponClass, OutItem)) {
+    return false;
+  }
+
+  OutItem.ItemId = ItemSaveData.ItemId.IsValid() ? ItemSaveData.ItemId : FGuid::NewGuid();
+  OutItem.Container = ItemSaveData.Container;
+  OutItem.GridPlacement = ItemSaveData.GridPlacement;
+  OutItem.LoadoutSlot = ItemSaveData.LoadoutSlot;
+  OutItem.CurrentAmmoInMagazine = FMath::Max(0, ItemSaveData.AmmoData.AmmoInMagazine);
+  OutItem.ReserveAmmo = FMath::Max(0, ItemSaveData.AmmoData.ReserveAmmo);
   return OutItem.ItemId.IsValid();
 }
 
@@ -765,6 +889,10 @@ bool UPlayerArmoryComponent::MoveItemToGridInternal(
 
   const bool bWasInLoadout = Item.Container == EInventoryItemContainer::LoadoutSlot;
   if (bWasInLoadout) {
+    SyncRuntimeWeaponStateFromBoundPawn();
+  }
+
+  if (bWasInLoadout) {
     const int32 PreviousSlotIndex =
         ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Item.LoadoutSlot));
     if (LoadoutItemIds.IsValidIndex(PreviousSlotIndex) &&
@@ -794,6 +922,8 @@ bool UPlayerArmoryComponent::MoveItemToLoadoutInternal(
   if (!IsItemAllowedInLoadout(Item, Slot)) {
     return false;
   }
+
+  SyncRuntimeWeaponStateFromBoundPawn();
 
   const int32 TargetSlotIndex = ProjectWeaponLoadout::ToIndex(static_cast<uint8>(Slot));
   if (!LoadoutItemIds.IsValidIndex(TargetSlotIndex)) {
