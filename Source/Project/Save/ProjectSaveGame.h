@@ -10,7 +10,7 @@ class PROJECT_API UProjectSaveGame : public USaveGame {
   GENERATED_BODY()
 
 public:
-  static constexpr int32 CurrentSchemaVersion = 1;
+  static constexpr int32 CurrentSchemaVersion = 2;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
   int32 SaveSchemaVersion = CurrentSchemaVersion;
@@ -20,6 +20,9 @@ public:
 
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
   FDateTime SavedAtUtc;
+
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
+  FRunMetaSaveData RunMeta;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
   FPlayerSaveData PlayerData;

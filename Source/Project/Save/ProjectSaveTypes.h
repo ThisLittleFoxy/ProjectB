@@ -2,15 +2,53 @@
 
 #include "CoreMinimal.h"
 #include "Combat/WeaponBase.h"
+#include "GameFramework/Actor.h"
 #include "Inventory/InventoryItemTypes.h"
 #include "Save/WeaponAmmoSaveData.h"
 #include "UObject/SoftObjectPtr.h"
 #include "ProjectSaveTypes.generated.h"
 
+class AActor;
+
 UENUM(BlueprintType)
 enum class EProjectSaveSlotKind : uint8 {
   Quick UMETA(DisplayName = "Quick"),
   Manual UMETA(DisplayName = "Manual")
+};
+
+UENUM(BlueprintType)
+enum class EProjectWorldSavePolicy : uint8 {
+  None UMETA(DisplayName = "None"),
+  GameplayCritical UMETA(DisplayName = "Gameplay Critical"),
+  PersistentEnemy UMETA(DisplayName = "Persistent Enemy"),
+  CustomComponentOnly UMETA(DisplayName = "Custom Component Only")
+};
+
+USTRUCT(BlueprintType)
+struct PROJECT_API FProjectWorldSaveRule {
+  GENERATED_BODY()
+
+  // First matching rule wins. If no rule matches, the actor is not persisted.
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  TSoftClassPtr<AActor> ActorClass;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  EProjectWorldSavePolicy SavePolicy = EProjectWorldSavePolicy::None;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  bool bIncludeDerivedClasses = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  bool bSaveHealthState = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  bool bSaveDestroyedState = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  bool bSaveTransform = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Save")
+  bool bSaveCustomData = false;
 };
 
 USTRUCT(BlueprintType)
@@ -87,6 +125,17 @@ struct PROJECT_API FSaveableActorCustomData {
 };
 
 USTRUCT(BlueprintType)
+struct PROJECT_API FRunMetaSaveData {
+  GENERATED_BODY()
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
+  FString BuildVersion;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
+  int64 TotalPlayTimeSeconds = 0;
+};
+
+USTRUCT(BlueprintType)
 struct PROJECT_API FArmoryItemSaveData {
   GENERATED_BODY()
 
@@ -151,7 +200,7 @@ struct PROJECT_API FWorldActorSaveData {
   GENERATED_BODY()
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
-  FGuid SaveId;
+  FGuid PersistentId;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
   bool bDestroyedOrDead = false;
@@ -161,6 +210,12 @@ struct PROJECT_API FWorldActorSaveData {
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
   float CurrentHealth = 0.0f;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
+  bool bHasTransformState = false;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
+  FTransform ActorTransform = FTransform::Identity;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Save")
   FSaveableActorCustomData CustomData;

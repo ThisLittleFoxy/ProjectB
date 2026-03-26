@@ -17,6 +17,7 @@
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/WeaponShopTerminal.h"
 #include "Inventory/PlayerArmoryComponent.h"
+#include "ProjectGameViewportClient.h"
 #include "Project.h"
 #include "Save/ProjectSaveSubsystem.h"
 #include "TimerManager.h"
@@ -111,11 +112,6 @@ void AMainPlayerController::SetupInputComponent() {
     }
 
     BindInputActions();
-
-    if (InputComponent) {
-      InputComponent->BindKey(EKeys::Escape, IE_Pressed, this,
-                              &AMainPlayerController::HandleCloseOverlayKey);
-    }
   } else {
     UE_LOG(LogProject, Warning,
            TEXT("Not a local player controller, skipping input setup"));
@@ -138,6 +134,7 @@ void AMainPlayerController::BindInputActions() {
   }
 
   TSet<const UInputAction *> BoundActions;
+  bool bBoundMenuToggleAction = false;
   for (UInputMappingContext *Context : AllContexts) {
     if (!Context) {
       continue;
@@ -185,6 +182,18 @@ void AMainPlayerController::BindInputActions() {
         EnhancedInputComponent->BindAction(
             Action, ETriggerEvent::Started, this,
             &AMainPlayerController::HandleInventoryToggle);
+      } else if (ActionName.Contains(TEXT("ExitSeat")) ||
+                 ActionName.Contains(TEXT("Pause")) ||
+                 ActionName.Contains(TEXT("Menu"))) {
+        UInputAction *MutableAction = const_cast<UInputAction *>(Action);
+        if (MutableAction) {
+          MutableAction->bTriggerWhenPaused = true;
+        }
+
+        EnhancedInputComponent->BindAction(
+            Action, ETriggerEvent::Started, this,
+            &AMainPlayerController::HandleMenuToggle);
+        bBoundMenuToggleAction = true;
       } else if (ActionName.Contains(TEXT("SaveLoad")) ||
                  ActionName.Contains(TEXT("QuickLoad"))) {
         EnhancedInputComponent->BindAction(
@@ -231,6 +240,12 @@ void AMainPlayerController::BindInputActions() {
 
       BoundActions.Add(Action);
     }
+  }
+
+  if (!bBoundMenuToggleAction) {
+    UE_LOG(LogProject, Warning,
+           TEXT("No menu toggle input action was found in the active mapping contexts. "
+                "Add IA_ExitSeat (or another Pause/Menu action) to IMC_Default."));
   }
 }
 
@@ -672,6 +687,10 @@ void AMainPlayerController::HandleQuickLoad(const FInputActionValue &Value) {
   RequestQuickLoad();
 }
 
+void AMainPlayerController::HandleMenuToggle(const FInputActionValue &Value) {
+  HandleCloseOverlayKey();
+}
+
 void AMainPlayerController::HandleCloseOverlayKey() {
   if (WeaponShopWidget && WeaponShopWidget->IsInViewport()) {
     CloseWeaponShop();
@@ -680,6 +699,16 @@ void AMainPlayerController::HandleCloseOverlayKey() {
 
   if (InventoryWidget && InventoryWidget->IsInViewport()) {
     CloseInventory();
+    return;
+  }
+
+  if (UProjectGameViewportClient *ProjectViewportClient =
+          Cast<UProjectGameViewportClient>(GetWorld()
+                                               ? GetWorld()->GetGameViewport()
+                                               : nullptr)) {
+    if (ProjectViewportClient->HandleEscapeMenuAction()) {
+      return;
+    }
   }
 }
 
@@ -747,6 +776,26 @@ bool AMainPlayerController::RequestManualLoad() {
           GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
                             : nullptr) {
     return SaveSubsystem->ManualLoad();
+  }
+
+  return false;
+}
+
+bool AMainPlayerController::RequestOverwriteSaveSlot(const FString &SlotName) {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->OverwriteSaveSlot(SlotName);
+  }
+
+  return false;
+}
+
+bool AMainPlayerController::RequestDeleteSaveSlot(const FString &SlotName) {
+  if (UProjectSaveSubsystem *SaveSubsystem =
+          GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
+                            : nullptr) {
+    return SaveSubsystem->DeleteSaveSlot(SlotName);
   }
 
   return false;

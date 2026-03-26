@@ -60,6 +60,12 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Save")
   bool RequestManualLoad();
 
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestOverwriteSaveSlot(const FString &SlotName);
+
+  UFUNCTION(BlueprintCallable, Category = "Save")
+  bool RequestDeleteSaveSlot(const FString &SlotName);
+
 protected:
   UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
   TArray<UInputMappingContext *> DefaultMappingContexts;
@@ -192,6 +198,9 @@ protected:
 
   UFUNCTION()
   void HandleQuickLoad(const FInputActionValue &Value);
+
+  UFUNCTION()
+  void HandleMenuToggle(const FInputActionValue &Value);
 
   void HandleCloseOverlayKey();
 

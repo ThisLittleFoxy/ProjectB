@@ -1,9 +1,7 @@
 #include "Save/SaveableActorComponent.h"
 
 #include "Character/HealthComponent.h"
-#include "Kismet/GameplayStatics.h"
 #include "Project.h"
-#include "Save/ProjectSaveSubsystem.h"
 #include "Save/SaveableActorInterface.h"
 
 USaveableActorComponent::USaveableActorComponent() {
@@ -23,19 +21,6 @@ void USaveableActorComponent::BeginPlay() {
   }
 
   CacheDefaultState();
-
-  if (!SaveId.IsValid()) {
-    UE_LOG(LogProject, Warning,
-           TEXT("SaveableActorComponent: owner '%s' has no SaveId and will be ignored by the save system"),
-           *GetNameSafe(GetOwner()));
-  }
-
-  if (UProjectSaveSubsystem *SaveSubsystem =
-          GetWorld() && GetWorld()->GetGameInstance()
-              ? GetWorld()->GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
-              : nullptr) {
-    SaveSubsystem->ClearDestroyedActorRecord(GetOwnerMapName(), SaveId);
-  }
 }
 
 void USaveableActorComponent::EndPlay(
@@ -45,40 +30,21 @@ void USaveableActorComponent::EndPlay(
         this, &USaveableActorComponent::HandleTrackedActorHealthChanged);
   }
 
-  if (bTrackDestroyedState && SaveId.IsValid() &&
-      EndPlayReason == EEndPlayReason::Destroyed) {
-    FWorldActorSaveData SaveRecord;
-    if (BuildSaveRecord(SaveRecord)) {
-      SaveRecord.bDestroyedOrDead = true;
-    } else {
-      SaveRecord.SaveId = SaveId;
-      SaveRecord.bDestroyedOrDead = true;
-      SaveRecord.bHasHealthState = bLastKnownHasHealthState;
-      SaveRecord.CurrentHealth = LastKnownHealth;
-      CaptureCustomData(SaveRecord.CustomData);
-    }
-
-    if (UProjectSaveSubsystem *SaveSubsystem =
-            GetWorld() && GetWorld()->GetGameInstance()
-                ? GetWorld()->GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()
-                : nullptr) {
-      SaveSubsystem->RegisterDestroyedActorRecord(GetOwnerMapName(), SaveRecord);
-    }
-  }
-
   Super::EndPlay(EndPlayReason);
 }
 
-void USaveableActorComponent::RegenerateSaveId() { SaveId = FGuid::NewGuid(); }
+void USaveableActorComponent::RegeneratePersistentIdOverride() {
+  SaveId = FGuid::NewGuid();
+}
 
 bool USaveableActorComponent::BuildSaveRecord(
-    FWorldActorSaveData &OutSaveRecord) const {
-  if (!SaveId.IsValid() || !GetOwner()) {
+    const FGuid &PersistentId, FWorldActorSaveData &OutSaveRecord) const {
+  if (!PersistentId.IsValid() || !GetOwner()) {
     return false;
   }
 
   OutSaveRecord = FWorldActorSaveData();
-  OutSaveRecord.SaveId = SaveId;
+  OutSaveRecord.PersistentId = PersistentId;
   OutSaveRecord.CustomData = FSaveableActorCustomData();
 
   if (bTrackHealthState) {
@@ -96,6 +62,11 @@ bool USaveableActorComponent::BuildSaveRecord(
     }
   }
 
+  if (bTrackTransformState) {
+    OutSaveRecord.bHasTransformState = true;
+    OutSaveRecord.ActorTransform = GetOwner()->GetActorTransform();
+  }
+
   CaptureCustomData(OutSaveRecord.CustomData);
   return !IsRecordAtDefaultState(OutSaveRecord);
 }
@@ -103,8 +74,13 @@ bool USaveableActorComponent::BuildSaveRecord(
 void USaveableActorComponent::ApplySaveRecord(
     const FWorldActorSaveData &SaveRecord) {
   AActor *OwnerActor = GetOwner();
-  if (!OwnerActor || SaveRecord.SaveId != SaveId) {
+  if (!OwnerActor) {
     return;
+  }
+
+  if (SaveRecord.bHasTransformState) {
+    OwnerActor->SetActorTransform(SaveRecord.ActorTransform, false, nullptr,
+                                  ETeleportType::TeleportPhysics);
   }
 
   bool bHandledDestroyedStateViaHealth = false;
@@ -166,11 +142,14 @@ void USaveableActorComponent::CacheDefaultState() {
     bDefaultHasHealthState = false;
     DefaultHealth = 0.0f;
   }
-}
 
-FString USaveableActorComponent::GetOwnerMapName() const {
-  return GetWorld() ? UGameplayStatics::GetCurrentLevelName(GetWorld(), true)
-                    : FString();
+  if (GetOwner() && bTrackTransformState) {
+    bDefaultHasTransformState = true;
+    DefaultTransform = GetOwner()->GetActorTransform();
+  } else {
+    bDefaultHasTransformState = false;
+    DefaultTransform = FTransform::Identity;
+  }
 }
 
 void USaveableActorComponent::CaptureCustomData(
@@ -200,6 +179,15 @@ bool USaveableActorComponent::IsRecordAtDefaultState(
   if (SaveRecord.bHasHealthState &&
       !FMath::IsNearlyEqual(SaveRecord.CurrentHealth, DefaultHealth,
                             KINDA_SMALL_NUMBER)) {
+    return false;
+  }
+
+  if (SaveRecord.bHasTransformState != bDefaultHasTransformState) {
+    return false;
+  }
+
+  if (SaveRecord.bHasTransformState &&
+      !SaveRecord.ActorTransform.Equals(DefaultTransform, KINDA_SMALL_NUMBER)) {
     return false;
   }
 

@@ -21,6 +21,7 @@ public class Project : ModuleRules
 
             // Gameplay systems
             "GameplayTags",
+            "DeveloperSettings",
 
             // UI
             "UMG",

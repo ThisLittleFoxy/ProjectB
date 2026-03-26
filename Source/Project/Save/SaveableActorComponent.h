@@ -17,13 +17,18 @@ public:
   virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
   UFUNCTION(BlueprintPure, Category = "Save")
-  FGuid GetSaveId() const { return SaveId; }
+  FGuid GetPersistentIdOverride() const { return SaveId; }
+
+  UFUNCTION(BlueprintPure, Category = "Save")
+  bool HasPersistentIdOverride() const { return SaveId.IsValid(); }
 
   UFUNCTION(BlueprintCallable, CallInEditor, Category = "Save")
-  void RegenerateSaveId();
+  void RegeneratePersistentIdOverride();
 
-  bool BuildSaveRecord(FWorldActorSaveData &OutSaveRecord) const;
+  bool BuildSaveRecord(const FGuid &PersistentId,
+                       FWorldActorSaveData &OutSaveRecord) const;
   void ApplySaveRecord(const FWorldActorSaveData &SaveRecord);
+  bool ShouldTrackDestroyedState() const { return bTrackDestroyedState; }
 
 protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Save")
@@ -34,6 +39,9 @@ protected:
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Save")
   bool bTrackDestroyedState = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Save")
+  bool bTrackTransformState = false;
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Save")
   bool bDestroyOwnerWhenRestoredAsDestroyed = true;
@@ -63,6 +71,12 @@ private:
   float DefaultHealth = 0.0f;
 
   UPROPERTY(Transient)
+  bool bDefaultHasTransformState = false;
+
+  UPROPERTY(Transient)
+  FTransform DefaultTransform = FTransform::Identity;
+
+  UPROPERTY(Transient)
   FSaveableActorCustomData DefaultCustomData;
 
   UPROPERTY(Transient)
@@ -72,7 +86,6 @@ private:
   float LastKnownHealth = 0.0f;
 
   void CacheDefaultState();
-  FString GetOwnerMapName() const;
   void CaptureCustomData(FSaveableActorCustomData &OutCustomData) const;
   bool IsRecordAtDefaultState(const FWorldActorSaveData &SaveRecord) const;
 

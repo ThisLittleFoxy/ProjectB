@@ -20,6 +20,9 @@ struct PROJECT_API FProjectSaveSlotMetadata {
 
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
   FString MapName;
+
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category = "Save")
+  FRunMetaSaveData RunMeta;
 };
 
 UCLASS()
