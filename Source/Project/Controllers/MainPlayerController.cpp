@@ -741,6 +741,46 @@ void AMainPlayerController::SetMouseCursorVisible(bool bVisible) {
   }
 }
 
+void AMainPlayerController::SetStartupMenuEnabled(bool bEnabled) {
+  if (UProjectGameViewportClient *ProjectViewportClient =
+          Cast<UProjectGameViewportClient>(GetWorld()
+                                               ? GetWorld()->GetGameViewport()
+                                               : nullptr)) {
+    ProjectViewportClient->SetStartupMenuEnabled(bEnabled);
+  }
+}
+
+bool AMainPlayerController::IsStartupMenuEnabled() const {
+  if (const UProjectGameViewportClient *ProjectViewportClient =
+          Cast<UProjectGameViewportClient>(GetWorld()
+                                               ? GetWorld()->GetGameViewport()
+                                               : nullptr)) {
+    return ProjectViewportClient->IsStartupMenuEnabled();
+  }
+
+  return false;
+}
+
+void AMainPlayerController::SetInGameMenuEnabled(bool bEnabled) {
+  if (UProjectGameViewportClient *ProjectViewportClient =
+          Cast<UProjectGameViewportClient>(GetWorld()
+                                               ? GetWorld()->GetGameViewport()
+                                               : nullptr)) {
+    ProjectViewportClient->SetInGameMenuEnabled(bEnabled);
+  }
+}
+
+bool AMainPlayerController::IsInGameMenuEnabled() const {
+  if (const UProjectGameViewportClient *ProjectViewportClient =
+          Cast<UProjectGameViewportClient>(GetWorld()
+                                               ? GetWorld()->GetGameViewport()
+                                               : nullptr)) {
+    return ProjectViewportClient->IsInGameMenuEnabled();
+  }
+
+  return false;
+}
+
 bool AMainPlayerController::RequestQuickSave() {
   if (UProjectSaveSubsystem *SaveSubsystem =
           GetGameInstance() ? GetGameInstance()->GetSubsystem<UProjectSaveSubsystem>()

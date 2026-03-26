@@ -222,4 +222,16 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "UI")
   void SetMouseCursorVisible(bool bVisible);
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Menus")
+  void SetStartupMenuEnabled(bool bEnabled);
+
+  UFUNCTION(BlueprintPure, Category = "UI|Menus")
+  bool IsStartupMenuEnabled() const;
+
+  UFUNCTION(BlueprintCallable, Category = "UI|Menus")
+  void SetInGameMenuEnabled(bool bEnabled);
+
+  UFUNCTION(BlueprintPure, Category = "UI|Menus")
+  bool IsInGameMenuEnabled() const;
 };

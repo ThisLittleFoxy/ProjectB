@@ -23,6 +23,10 @@ public:
   virtual bool WindowCloseRequested() override;
   virtual void CloseRequested(FViewport *InViewport) override;
   bool HandleEscapeMenuAction();
+  void SetStartupMenuEnabled(bool bEnabled);
+  bool IsStartupMenuEnabled() const { return bStartupMenuEnabled; }
+  void SetInGameMenuEnabled(bool bEnabled);
+  bool IsInGameMenuEnabled() const { return bInGameMenuEnabled; }
 
 private:
   enum class EProjectViewportOverlayWidgetType : uint8 {
@@ -141,6 +145,8 @@ private:
   double LoadingHideAtSeconds = -1.0;
   bool bStartupMenuShown = false;
   bool bShouldShowStartupMenu = true;
+  bool bStartupMenuEnabled = true;
+  bool bInGameMenuEnabled = true;
   bool bOverlayInputStateApplied = false;
   bool bPausedForOverlayMenu = false;
   bool bHasRequestedProcessExit = false;

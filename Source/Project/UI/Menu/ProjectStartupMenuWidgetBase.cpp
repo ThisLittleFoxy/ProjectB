@@ -20,9 +20,10 @@
 #define LOCTEXT_NAMESPACE "ProjectStartupMenuWidgetBase"
 
 namespace {
-void ApplyTextStyle(UTextBlock *TextBlock, int32 FontSize,
-                    const FLinearColor &Color, FName Typeface,
-                    ETextJustify::Type Justification = ETextJustify::Left) {
+void ApplyStartupMenuTextStyle(
+    UTextBlock *TextBlock, int32 FontSize, const FLinearColor &Color,
+    FName Typeface,
+    ETextJustify::Type Justification = ETextJustify::Left) {
   if (!TextBlock) {
     return;
   }
@@ -36,9 +37,11 @@ void ApplyTextStyle(UTextBlock *TextBlock, int32 FontSize,
   TextBlock->SetJustification(Justification);
 }
 
-UButton *CreateMenuButton(UWidgetTree *WidgetTree, UVerticalBox *ParentBox,
-                          const FName &ButtonName, const FName &LabelName,
-                          const FText &LabelText, float BottomPadding) {
+UButton *CreateStartupMenuButton(UWidgetTree *WidgetTree, UVerticalBox *ParentBox,
+                                 const FName &ButtonName,
+                                 const FName &LabelName,
+                                 const FText &LabelText,
+                                 float BottomPadding) {
   if (!WidgetTree || !ParentBox) {
     return nullptr;
   }
@@ -57,15 +60,15 @@ UButton *CreateMenuButton(UWidgetTree *WidgetTree, UVerticalBox *ParentBox,
   UTextBlock *Label = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), LabelName);
   Label->SetText(LabelText);
-  ApplyTextStyle(Label, 18, FLinearColor::White, TEXT("Bold"),
-                 ETextJustify::Center);
+  ApplyStartupMenuTextStyle(Label, 18, FLinearColor::White, TEXT("Bold"),
+                            ETextJustify::Center);
   Button->SetContent(Label);
 
   return Button;
 }
 
-bool AreSaveSlotsEqual(const FProjectSaveSlotMetadata &Left,
-                       const FProjectSaveSlotMetadata &Right) {
+bool AreStartupSaveSlotsEqual(const FProjectSaveSlotMetadata &Left,
+                              const FProjectSaveSlotMetadata &Right) {
   return Left.SlotName == Right.SlotName &&
          Left.SlotKind == Right.SlotKind &&
          Left.SavedAtUtc == Right.SavedAtUtc &&
@@ -290,7 +293,7 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
   UTextBlock *MenuTitle = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_MenuTitle"));
   MenuTitle->SetText(LOCTEXT("MenuTitle", "Project B"));
-  ApplyTextStyle(MenuTitle, 34, FLinearColor::White, TEXT("Bold"));
+  ApplyStartupMenuTextStyle(MenuTitle, 34, FLinearColor::White, TEXT("Bold"));
   if (UVerticalBoxSlot *TitleSlot =
           StartupMenuBox->AddChildToVerticalBox(MenuTitle)) {
     TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
@@ -299,26 +302,27 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
   UTextBlock *MenuSubtitle = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_MenuSubtitle"));
   MenuSubtitle->SetText(LOCTEXT("MenuSubtitle", "Стартовое меню"));
-  ApplyTextStyle(MenuSubtitle, 16, FLinearColor(0.72f, 0.77f, 0.82f, 1.0f),
-                 TEXT("Regular"));
+  ApplyStartupMenuTextStyle(
+      MenuSubtitle, 16, FLinearColor(0.72f, 0.77f, 0.82f, 1.0f),
+      TEXT("Regular"));
   if (UVerticalBoxSlot *SubtitleSlot =
           StartupMenuBox->AddChildToVerticalBox(MenuSubtitle)) {
     SubtitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 28.0f));
   }
 
-  CreateMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_StartGame"),
+  CreateStartupMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_StartGame"),
                    TEXT("Text_StartGame"), LOCTEXT("StartGameButton", "Начать игру"),
                    12.0f);
-  CreateMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_ContinueGame"),
+  CreateStartupMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_ContinueGame"),
                    TEXT("Text_ContinueGame"),
                    LOCTEXT("ContinueGameButton", "Продолжить игру"), 12.0f);
-  CreateMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_LoadGame"),
+  CreateStartupMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_LoadGame"),
                    TEXT("Text_LoadGame"),
                    LOCTEXT("LoadGameButton", "Загрузить сохранение"), 12.0f);
-  CreateMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_Settings"),
+  CreateStartupMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_Settings"),
                    TEXT("Text_Settings"), LOCTEXT("SettingsButton", "Настройки"),
                    18.0f);
-  CreateMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_ExitGame"),
+  CreateStartupMenuButton(WidgetTree, StartupMenuBox, TEXT("Button_ExitGame"),
                    TEXT("Text_ExitGame"), LOCTEXT("ExitGameButton", "Выход"),
                    0.0f);
 
@@ -342,7 +346,7 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
   UTextBlock *SaveTitle = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_SaveSelectionTitle"));
   SaveTitle->SetText(LOCTEXT("SaveSelectionTitle", "Выбор сохранения"));
-  ApplyTextStyle(SaveTitle, 30, FLinearColor::White, TEXT("Bold"));
+  ApplyStartupMenuTextStyle(SaveTitle, 30, FLinearColor::White, TEXT("Bold"));
   if (UVerticalBoxSlot *TitleSlot =
           SaveSelectionBox->AddChildToVerticalBox(SaveTitle)) {
     TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
@@ -352,8 +356,9 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
       UTextBlock::StaticClass(), TEXT("Text_SaveSelectionSubtitle"));
   SaveSubtitle->SetText(
       LOCTEXT("SaveSelectionSubtitle", "Выберите сохранение, которое хотите загрузить."));
-  ApplyTextStyle(SaveSubtitle, 15,
-                 FLinearColor(0.72f, 0.77f, 0.82f, 1.0f), TEXT("Regular"));
+  ApplyStartupMenuTextStyle(
+      SaveSubtitle, 15, FLinearColor(0.72f, 0.77f, 0.82f, 1.0f),
+      TEXT("Regular"));
   if (UVerticalBoxSlot *SubtitleSlot =
           SaveSelectionBox->AddChildToVerticalBox(SaveSubtitle)) {
     SubtitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 16.0f));
@@ -363,8 +368,9 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
       UTextBlock::StaticClass(), TEXT("Text_EmptySaveSlots"));
   EmptySaveSlotsText->SetText(
       LOCTEXT("EmptySaveSlotsText", "Доступных сохранений пока нет."));
-  ApplyTextStyle(EmptySaveSlotsText, 16,
-                 FLinearColor(0.73f, 0.78f, 0.84f, 1.0f), TEXT("Regular"));
+  ApplyStartupMenuTextStyle(
+      EmptySaveSlotsText, 16, FLinearColor(0.73f, 0.78f, 0.84f, 1.0f),
+      TEXT("Regular"));
   if (UVerticalBoxSlot *EmptySlot =
           SaveSelectionBox->AddChildToVerticalBox(EmptySaveSlotsText)) {
     EmptySlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
@@ -382,7 +388,7 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
       UVerticalBox::StaticClass(), TEXT("Panel_SaveSlots"));
   SaveScrollBox->AddChild(SaveSlotList);
 
-  CreateMenuButton(WidgetTree, SaveSelectionBox, TEXT("Button_BackToMenu"),
+  CreateStartupMenuButton(WidgetTree, SaveSelectionBox, TEXT("Button_BackToMenu"),
                    TEXT("Text_BackToMenu"),
                    LOCTEXT("BackToMenuButton", "Назад"), 0.0f);
 
@@ -394,8 +400,8 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
   UTextBlock *LoadingTitleText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_LoadingTitle"));
   LoadingTitleText->SetText(LOCTEXT("DefaultLoadingTitle", "Загрузка"));
-  ApplyTextStyle(LoadingTitleText, 28, FLinearColor::White, TEXT("Bold"),
-                 ETextJustify::Center);
+  ApplyStartupMenuTextStyle(LoadingTitleText, 28, FLinearColor::White,
+                            TEXT("Bold"), ETextJustify::Center);
   if (UVerticalBoxSlot *TitleSlot =
           LoadingBox->AddChildToVerticalBox(LoadingTitleText)) {
     TitleSlot->SetHorizontalAlignment(HAlign_Center);
@@ -405,9 +411,9 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
   UTextBlock *LoadingPercentText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_LoadingPercent"));
   LoadingPercentText->SetText(LOCTEXT("DefaultLoadingPercent", "0%"));
-  ApplyTextStyle(LoadingPercentText, 42,
-                 FLinearColor(0.97f, 0.98f, 1.0f, 1.0f), TEXT("Bold"),
-                 ETextJustify::Center);
+  ApplyStartupMenuTextStyle(LoadingPercentText, 42,
+                            FLinearColor(0.97f, 0.98f, 1.0f, 1.0f),
+                            TEXT("Bold"), ETextJustify::Center);
   if (UVerticalBoxSlot *PercentSlot =
           LoadingBox->AddChildToVerticalBox(LoadingPercentText)) {
     PercentSlot->SetHorizontalAlignment(HAlign_Center);
@@ -425,9 +431,9 @@ void UProjectStartupMenuWidgetBase::BuildDefaultLayout() {
       UTextBlock::StaticClass(), TEXT("Text_LoadingStatus"));
   LoadingStatusText->SetText(
       LOCTEXT("DefaultLoadingStatus", "Подождите, идёт подготовка..."));
-  ApplyTextStyle(LoadingStatusText, 15,
-                 FLinearColor(0.72f, 0.77f, 0.82f, 1.0f), TEXT("Regular"),
-                 ETextJustify::Center);
+  ApplyStartupMenuTextStyle(LoadingStatusText, 15,
+                            FLinearColor(0.72f, 0.77f, 0.82f, 1.0f),
+                            TEXT("Regular"), ETextJustify::Center);
   LoadingBox->AddChildToVerticalBox(LoadingStatusText);
 }
 
@@ -642,7 +648,8 @@ bool UProjectStartupMenuWidgetBase::AreSaveSlotsEquivalent(
   }
 
   for (int32 Index = 0; Index < AvailableSaveSlots.Num(); ++Index) {
-    if (!AreSaveSlotsEqual(AvailableSaveSlots[Index], OtherSaveSlots[Index])) {
+    if (!AreStartupSaveSlotsEqual(AvailableSaveSlots[Index],
+                                  OtherSaveSlots[Index])) {
       return false;
     }
   }

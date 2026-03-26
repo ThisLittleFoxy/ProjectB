@@ -13,17 +13,17 @@
 #define LOCTEXT_NAMESPACE "ProjectSaveSlotEntryWidgetBase"
 
 namespace {
-FText GetSaveSlotKindText(EProjectSaveSlotKind SlotKind) {
+FText GetProjectSaveSlotKindText(EProjectSaveSlotKind SlotKind) {
   return SlotKind == EProjectSaveSlotKind::Manual
              ? LOCTEXT("SaveSlotKindManual", "Ручное сохранение")
              : LOCTEXT("SaveSlotKindQuick", "Быстрое сохранение");
 }
 
-FText GetSaveSlotTimestampText(const FProjectSaveSlotMetadata &Metadata) {
+FText GetProjectSaveSlotTimestampText(const FProjectSaveSlotMetadata &Metadata) {
   return FText::FromString(Metadata.SavedAtUtc.ToString(TEXT("%d.%m.%Y %H:%M:%S UTC")));
 }
 
-FText GetSaveSlotPlayTimeText(const FProjectSaveSlotMetadata &Metadata) {
+FText GetProjectSaveSlotPlayTimeText(const FProjectSaveSlotMetadata &Metadata) {
   const int64 TotalSeconds = FMath::Max<int64>(0, Metadata.RunMeta.TotalPlayTimeSeconds);
   const int32 Hours = static_cast<int32>(TotalSeconds / 3600);
   const int32 Minutes = static_cast<int32>((TotalSeconds % 3600) / 60);
@@ -33,9 +33,10 @@ FText GetSaveSlotPlayTimeText(const FProjectSaveSlotMetadata &Metadata) {
       FString::Printf(TEXT("%02d:%02d:%02d"), Hours, Minutes, Seconds));
 }
 
-void ApplyTextStyle(UTextBlock *TextBlock, int32 FontSize,
-                    const FLinearColor &Color, FName Typeface,
-                    ETextJustify::Type Justification = ETextJustify::Left) {
+void ApplySaveSlotEntryTextStyle(
+    UTextBlock *TextBlock, int32 FontSize, const FLinearColor &Color,
+    FName Typeface,
+    ETextJustify::Type Justification = ETextJustify::Left) {
   if (!TextBlock) {
     return;
   }
@@ -98,8 +99,8 @@ void UProjectSaveSlotEntryWidgetBase::SetSaveSlotMetadata(
 
 FText UProjectSaveSlotEntryWidgetBase::GetPrimaryText() const {
   return FText::Format(LOCTEXT("SaveSlotPrimaryText", "{0} | {1}"),
-                       GetSaveSlotKindText(SaveSlotMetadata.SlotKind),
-                       GetSaveSlotTimestampText(SaveSlotMetadata));
+                       GetProjectSaveSlotKindText(SaveSlotMetadata.SlotKind),
+                       GetProjectSaveSlotTimestampText(SaveSlotMetadata));
 }
 
 FText UProjectSaveSlotEntryWidgetBase::GetMapText() const {
@@ -110,7 +111,7 @@ FText UProjectSaveSlotEntryWidgetBase::GetMapText() const {
 FText UProjectSaveSlotEntryWidgetBase::GetMetaText() const {
   return FText::Format(LOCTEXT("SaveSlotMetaText", "Слот: {0} | Наиграно: {1}"),
                        FText::FromString(SaveSlotMetadata.SlotName),
-                       GetSaveSlotPlayTimeText(SaveSlotMetadata));
+                       GetProjectSaveSlotPlayTimeText(SaveSlotMetadata));
 }
 
 void UProjectSaveSlotEntryWidgetBase::RequestSelectSlot() {
@@ -176,7 +177,8 @@ void UProjectSaveSlotEntryWidgetBase::BuildDefaultLayout() {
 
   UTextBlock *PrimaryText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_Primary"));
-  ApplyTextStyle(PrimaryText, 16, FLinearColor::White, TEXT("Bold"));
+  ApplySaveSlotEntryTextStyle(PrimaryText, 16, FLinearColor::White,
+                              TEXT("Bold"));
   if (UVerticalBoxSlot *PrimarySlot =
           InfoBox->AddChildToVerticalBox(PrimaryText)) {
     PrimarySlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
@@ -184,16 +186,16 @@ void UProjectSaveSlotEntryWidgetBase::BuildDefaultLayout() {
 
   UTextBlock *MapText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_Map"));
-  ApplyTextStyle(MapText, 14, FLinearColor(0.80f, 0.84f, 0.89f, 1.0f),
-                 TEXT("Regular"));
+  ApplySaveSlotEntryTextStyle(
+      MapText, 14, FLinearColor(0.80f, 0.84f, 0.89f, 1.0f), TEXT("Regular"));
   if (UVerticalBoxSlot *MapSlot = InfoBox->AddChildToVerticalBox(MapText)) {
     MapSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
   }
 
   UTextBlock *MetaText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_Meta"));
-  ApplyTextStyle(MetaText, 13, FLinearColor(0.67f, 0.72f, 0.78f, 1.0f),
-                 TEXT("Regular"));
+  ApplySaveSlotEntryTextStyle(
+      MetaText, 13, FLinearColor(0.67f, 0.72f, 0.78f, 1.0f), TEXT("Regular"));
   InfoBox->AddChildToVerticalBox(MetaText);
 
   UHorizontalBox *ActionsBox = WidgetTree->ConstructWidget<UHorizontalBox>(
@@ -211,8 +213,8 @@ void UProjectSaveSlotEntryWidgetBase::BuildDefaultLayout() {
   UTextBlock *OverwriteText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_Overwrite"));
   OverwriteText->SetText(LOCTEXT("OverwriteButtonText", "Перезаписать"));
-  ApplyTextStyle(OverwriteText, 13, FLinearColor::White, TEXT("Regular"),
-                 ETextJustify::Center);
+  ApplySaveSlotEntryTextStyle(OverwriteText, 13, FLinearColor::White,
+                              TEXT("Regular"), ETextJustify::Center);
   OverwriteButton->SetContent(OverwriteText);
 
   UButton *DeleteButton = WidgetTree->ConstructWidget<UButton>(
@@ -225,8 +227,8 @@ void UProjectSaveSlotEntryWidgetBase::BuildDefaultLayout() {
   UTextBlock *DeleteText = WidgetTree->ConstructWidget<UTextBlock>(
       UTextBlock::StaticClass(), TEXT("Text_Delete"));
   DeleteText->SetText(LOCTEXT("DeleteButtonText", "Удалить"));
-  ApplyTextStyle(DeleteText, 13, FLinearColor::White, TEXT("Regular"),
-                 ETextJustify::Center);
+  ApplySaveSlotEntryTextStyle(DeleteText, 13, FLinearColor::White,
+                              TEXT("Regular"), ETextJustify::Center);
   DeleteButton->SetContent(DeleteText);
 }
 

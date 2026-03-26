@@ -87,6 +87,34 @@ void UProjectGameViewportClient::CloseRequested(FViewport *InViewport) {
   Super::CloseRequested(InViewport);
 }
 
+void UProjectGameViewportClient::SetStartupMenuEnabled(bool bEnabled) {
+  if (bStartupMenuEnabled == bEnabled) {
+    return;
+  }
+
+  bStartupMenuEnabled = bEnabled;
+  if (!bStartupMenuEnabled &&
+      ActiveOverlayWidgetType == EProjectViewportOverlayWidgetType::Startup &&
+      (OverlayState == EProjectViewportOverlayState::StartupMenu ||
+       OverlayState == EProjectViewportOverlayState::SaveSelection)) {
+    HideStartupMenu();
+  }
+}
+
+void UProjectGameViewportClient::SetInGameMenuEnabled(bool bEnabled) {
+  if (bInGameMenuEnabled == bEnabled) {
+    return;
+  }
+
+  bInGameMenuEnabled = bEnabled;
+  if (!bInGameMenuEnabled &&
+      ActiveOverlayWidgetType == EProjectViewportOverlayWidgetType::InGame &&
+      (OverlayState == EProjectViewportOverlayState::InGameMenu ||
+       OverlayState == EProjectViewportOverlayState::SaveSelection)) {
+    HideInGameMenu();
+  }
+}
+
 bool UProjectGameViewportClient::HandleEscapeMenuAction() {
   EnsureOverlayWidgets();
 
@@ -343,7 +371,7 @@ void UProjectGameViewportClient::UnbindMapLifecycleDelegates() {
 }
 
 void UProjectGameViewportClient::MaybeShowStartupMenu() {
-  if (bStartupMenuShown || !bShouldShowStartupMenu) {
+  if (bStartupMenuShown || !bShouldShowStartupMenu || !bStartupMenuEnabled) {
     return;
   }
 
@@ -366,6 +394,10 @@ void UProjectGameViewportClient::MaybeShowStartupMenu() {
 }
 
 void UProjectGameViewportClient::ShowStartupMenu() {
+  if (!bStartupMenuEnabled) {
+    return;
+  }
+
   EnsureOverlayWidgets();
   RefreshAvailableSaveSlots();
   ActiveOverlayWidgetType = EProjectViewportOverlayWidgetType::Startup;
@@ -388,6 +420,10 @@ void UProjectGameViewportClient::ShowStartupMenu() {
 }
 
 void UProjectGameViewportClient::ShowStartupSaveSelectionMenu() {
+  if (!bStartupMenuEnabled) {
+    return;
+  }
+
   EnsureOverlayWidgets();
   RefreshAvailableSaveSlots();
   ActiveOverlayWidgetType = EProjectViewportOverlayWidgetType::Startup;
@@ -426,6 +462,10 @@ void UProjectGameViewportClient::HideStartupMenu() {
 }
 
 void UProjectGameViewportClient::ShowInGameMenu() {
+  if (!bInGameMenuEnabled) {
+    return;
+  }
+
   EnsureOverlayWidgets();
   if (ActiveOverlayWidgetType != EProjectViewportOverlayWidgetType::InGame &&
       !CanShowInGameMenu()) {
@@ -460,6 +500,10 @@ void UProjectGameViewportClient::ShowInGameMenu() {
 }
 
 void UProjectGameViewportClient::ShowInGameSaveSelectionMenu() {
+  if (!bInGameMenuEnabled) {
+    return;
+  }
+
   EnsureOverlayWidgets();
   if (ActiveOverlayWidgetType != EProjectViewportOverlayWidgetType::InGame &&
       !CanShowInGameMenu()) {
@@ -839,7 +883,8 @@ bool UProjectGameViewportClient::CanShowInGameMenu() const {
   const bool bStartupOverlayActive =
       ActiveOverlayWidgetType == EProjectViewportOverlayWidgetType::Startup &&
       OverlayState != EProjectViewportOverlayState::None;
-  if (!CurrentWorld || !CurrentWorld->IsGameWorld() || bStartupOverlayActive) {
+  if (!bInGameMenuEnabled || !CurrentWorld || !CurrentWorld->IsGameWorld() ||
+      bStartupOverlayActive) {
     return false;
   }
 
