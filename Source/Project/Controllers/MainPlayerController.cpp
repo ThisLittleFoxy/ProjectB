@@ -4,7 +4,6 @@
 #include "Arena/ArenaGameMode.h"
 #include "Arena/ArenaPlayerState.h"
 #include "Blueprint/UserWidget.h"
-#include "Character/ControllableCharacterInterface.h"
 #include "Character/CurrencyComponent.h"
 #include "Character/ProjectCharacter.h"
 #include "Combat/CombatComponent.h"
@@ -391,9 +390,13 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
     return;
   }
 
+  const AProjectCharacter *ProjectCharacter = Cast<AProjectCharacter>(InPawn);
+
   if (bClearStartingLoadoutOnPossess) {
-    if (UCombatComponent *CombatComp =
-            InPawn->FindComponentByClass<UCombatComponent>()) {
+    UCombatComponent *CombatComp =
+        ProjectCharacter ? ProjectCharacter->GetCombatComponent()
+                         : InPawn->FindComponentByClass<UCombatComponent>();
+    if (CombatComp) {
       CombatComp->ClearLoadout();
     }
   }
@@ -401,9 +404,13 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
   int32 InitialCurrency = 0;
   if (bSetStartingCurrencyOnPossess) {
     InitialCurrency = StartingCurrency;
-  } else if (const UCurrencyComponent *CurrencyComp =
-                 InPawn->FindComponentByClass<UCurrencyComponent>()) {
-    InitialCurrency = CurrencyComp->GetCurrency();
+  } else {
+    const UCurrencyComponent *CurrencyComp =
+        ProjectCharacter ? ProjectCharacter->GetCurrencyComponent()
+                         : InPawn->FindComponentByClass<UCurrencyComponent>();
+    if (CurrencyComp) {
+      InitialCurrency = CurrencyComp->GetCurrency();
+    }
   }
 
   PlayerArmoryComponent->InitializeEmptySession(InitialCurrency);
@@ -927,9 +934,9 @@ void AMainPlayerController::HandleSprintStarted(const FInputActionValue &Value) 
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StartSprint(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Sprint input ignored because pawn is not AProjectCharacter. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleSprintCompleted(const FInputActionValue &Value) {
@@ -944,9 +951,9 @@ void AMainPlayerController::HandleSprintCompleted(const FInputActionValue &Value
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StopSprint(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Stop sprint input ignored because pawn is not AProjectCharacter. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
@@ -971,9 +978,9 @@ void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_DoInteract(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Interact input ignored because pawn has no interaction path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
@@ -998,9 +1005,9 @@ void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StartFire(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Fire input ignored because pawn has no combat path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleFireCompleted(const FInputActionValue &Value) {
@@ -1025,9 +1032,9 @@ void AMainPlayerController::HandleFireCompleted(const FInputActionValue &Value) 
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StopFire(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Stop fire input ignored because pawn has no combat path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleReload(const FInputActionValue &Value) {

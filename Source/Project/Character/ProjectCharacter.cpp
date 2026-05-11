@@ -68,31 +68,6 @@ void AProjectCharacter::BeginPlay() {
   }
 }
 
-void AProjectCharacter::HandleMovementInput_Implementation(
-    const FVector &WorldDirection, float ScaleValue) {
-  AddMovementInput(WorldDirection, ScaleValue);
-}
-
-void AProjectCharacter::StartSprint_Implementation() {
-  RequestStartSprint();
-}
-
-void AProjectCharacter::StopSprint_Implementation() {
-  RequestStopSprint();
-}
-
-void AProjectCharacter::DoInteract_Implementation() {
-  RequestInteract();
-}
-
-void AProjectCharacter::StartFire_Implementation() {
-  RequestStartFire();
-}
-
-void AProjectCharacter::StopFire_Implementation() {
-  RequestStopFire();
-}
-
 void AProjectCharacter::RequestStartSprint() {
   if (!bCanSprint) {
     return;

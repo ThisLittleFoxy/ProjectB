@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "Character/ControllableCharacterInterface.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "ProjectCharacter.generated.h"
@@ -21,8 +20,7 @@ class UInteractionComponent;
  * components.
  */
 UCLASS(Blueprintable)
-class PROJECT_API AProjectCharacter : public ACharacter,
-                                      public IControllableCharacterInterface {
+class PROJECT_API AProjectCharacter : public ACharacter {
   GENERATED_BODY()
 
 public:
@@ -51,14 +49,6 @@ public:
 
   UFUNCTION(BlueprintPure, Category = "Character|Components")
   UCurrencyComponent *GetCurrencyComponent() const { return CurrencyComponent; }
-
-  virtual void HandleMovementInput_Implementation(
-      const FVector &WorldDirection, float ScaleValue) override;
-  virtual void StartSprint_Implementation() override;
-  virtual void StopSprint_Implementation() override;
-  virtual void DoInteract_Implementation() override;
-  virtual void StartFire_Implementation() override;
-  virtual void StopFire_Implementation() override;
 
   UFUNCTION(BlueprintCallable, Category = "Character|Movement")
   void RequestStartSprint();
