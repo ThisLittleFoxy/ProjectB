@@ -185,6 +185,24 @@ void UProjectCheatManager::DamageCrosshair(float DamageAmount) {
 
 void UProjectCheatManager::KillCrosshair() { DamageCrosshair(100000.0f); }
 
+void UProjectCheatManager::ArenaKillSelf() {
+  APlayerController* PC = GetOuterAPlayerController();
+  APawn* Pawn = GetControlledPawn();
+  if (!PC || !Pawn) {
+    GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("No pawn!"));
+    return;
+  }
+
+  UGameplayStatics::ApplyDamage(Pawn, 100000.0f, PC, Pawn,
+                                UDamageType::StaticClass());
+
+  const FString Msg =
+      FString::Printf(TEXT("ArenaKillSelf applied lethal damage to %s"),
+                      *Pawn->GetName());
+  UE_LOG(LogTemp, Log, TEXT("%s"), *Msg);
+  GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, Msg);
+}
+
 APawn* UProjectCheatManager::GetControlledPawn() const {
   const APlayerController* PC = GetOuterAPlayerController();
   return PC ? PC->GetPawn() : nullptr;

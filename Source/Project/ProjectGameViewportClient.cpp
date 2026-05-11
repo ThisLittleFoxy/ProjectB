@@ -1,5 +1,7 @@
 #include "ProjectGameViewportClient.h"
 
+#include "Arena/ArenaGameMode.h"
+#include "Arena/ArenaGameState.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
@@ -18,8 +20,25 @@
 void UProjectGameViewportClient::Tick(float DeltaTime) {
   Super::Tick(DeltaTime);
 
-  EnsureOverlayWidgets();
   BindMapLifecycleDelegates();
+
+#if WITH_EDITOR
+  if (UWorld *CurrentWorld = GetWorld();
+      CurrentWorld && CurrentWorld->IsGameWorld() &&
+      CurrentWorld->WorldType == EWorldType::PIE &&
+      CurrentWorld->GetNetMode() != NM_Standalone) {
+    bShouldShowStartupMenu = false;
+    bStartupMenuShown = true;
+    if (OverlayState != EProjectViewportOverlayState::None ||
+        ActiveOverlayWidgetType != EProjectViewportOverlayWidgetType::None ||
+        bOverlayInputStateApplied || StartupOverlayWidget || InGameOverlayWidget) {
+      SuppressOverlaysForArenaRuntime();
+    }
+    return;
+  }
+#endif
+
+  EnsureOverlayWidgets();
   MaybeShowStartupMenu();
   SyncLoadingScreenWithSaveSubsystem();
 
@@ -88,30 +107,46 @@ void UProjectGameViewportClient::CloseRequested(FViewport *InViewport) {
 }
 
 void UProjectGameViewportClient::SetStartupMenuEnabled(bool bEnabled) {
-  if (bStartupMenuEnabled == bEnabled) {
-    return;
-  }
+  UE_LOG(LogProject, Display,
+         TEXT("Project viewport startup menu enabled=%s ActiveWidgetType=%d OverlayState=%d"),
+         bEnabled ? TEXT("true") : TEXT("false"),
+         static_cast<int32>(ActiveOverlayWidgetType),
+         static_cast<int32>(OverlayState));
 
   bStartupMenuEnabled = bEnabled;
-  if (!bStartupMenuEnabled &&
+  bShouldShowStartupMenu = bEnabled;
+
+  if (!bEnabled &&
       ActiveOverlayWidgetType == EProjectViewportOverlayWidgetType::Startup &&
       (OverlayState == EProjectViewportOverlayState::StartupMenu ||
        OverlayState == EProjectViewportOverlayState::SaveSelection)) {
     HideStartupMenu();
+    return;
+  }
+
+  if (!bEnabled) {
+    UpdateOverlayInputState();
   }
 }
 
 void UProjectGameViewportClient::SetInGameMenuEnabled(bool bEnabled) {
-  if (bInGameMenuEnabled == bEnabled) {
-    return;
-  }
+  UE_LOG(LogProject, Display,
+         TEXT("Project viewport in-game menu enabled=%s ActiveWidgetType=%d OverlayState=%d"),
+         bEnabled ? TEXT("true") : TEXT("false"),
+         static_cast<int32>(ActiveOverlayWidgetType),
+         static_cast<int32>(OverlayState));
 
   bInGameMenuEnabled = bEnabled;
-  if (!bInGameMenuEnabled &&
+  if (!bEnabled &&
       ActiveOverlayWidgetType == EProjectViewportOverlayWidgetType::InGame &&
       (OverlayState == EProjectViewportOverlayState::InGameMenu ||
        OverlayState == EProjectViewportOverlayState::SaveSelection)) {
     HideInGameMenu();
+    return;
+  }
+
+  if (!bEnabled) {
+    UpdateOverlayInputState();
   }
 }
 
@@ -370,6 +405,73 @@ void UProjectGameViewportClient::UnbindMapLifecycleDelegates() {
   }
 }
 
+bool UProjectGameViewportClient::IsArenaRuntimeWorld() const {
+  const UWorld *CurrentWorld = GetWorld();
+  if (!CurrentWorld || !CurrentWorld->IsGameWorld()) {
+    return false;
+  }
+
+  if (CurrentWorld->GetAuthGameMode<AArenaGameMode>()) {
+    return true;
+  }
+
+  return CurrentWorld->GetGameState<AArenaGameState>() != nullptr;
+}
+
+void UProjectGameViewportClient::SuppressOverlaysForArenaRuntime() {
+  const bool bHadOverlay = OverlayState != EProjectViewportOverlayState::None ||
+                           ActiveOverlayWidgetType !=
+                               EProjectViewportOverlayWidgetType::None ||
+                           bOverlayInputStateApplied ||
+                           (StartupOverlayWidget &&
+                            StartupOverlayWidget->IsInViewport()) ||
+                           (InGameOverlayWidget &&
+                            InGameOverlayWidget->IsInViewport());
+
+  bShouldShowStartupMenu = false;
+  bStartupMenuEnabled = false;
+  bInGameMenuEnabled = false;
+  ActiveOverlayWidgetType = EProjectViewportOverlayWidgetType::None;
+  OverlayState = EProjectViewportOverlayState::None;
+  LoadingScreenPurpose = EProjectLoadingScreenPurpose::None;
+  LoadingHideAtSeconds = -1.0;
+
+  if (bPausedForOverlayMenu) {
+    if (UWorld *CurrentWorld = GetWorld();
+        CurrentWorld && UGameplayStatics::IsGamePaused(CurrentWorld)) {
+      UGameplayStatics::SetGamePaused(CurrentWorld, false);
+    }
+    bPausedForOverlayMenu = false;
+  }
+
+  if (bHadOverlay) {
+    if (APlayerController *AppliedController = OverlayInputPlayerController.Get()) {
+      RestoreOverlayInputState(AppliedController);
+    } else if (APlayerController *PlayerController = GetPrimaryPlayerController()) {
+      RestoreOverlayInputState(PlayerController);
+    }
+  }
+
+  bOverlayInputStateApplied = false;
+  AppliedOverlayInputState = EProjectViewportOverlayState::None;
+  OverlayInputPlayerController.Reset();
+
+  if (StartupOverlayWidget) {
+    StartupOverlayWidget->SetVisibility(ESlateVisibility::Collapsed);
+    StartupOverlayWidget->RemoveFromParent();
+  }
+
+  if (InGameOverlayWidget) {
+    InGameOverlayWidget->SetVisibility(ESlateVisibility::Collapsed);
+    InGameOverlayWidget->RemoveFromParent();
+  }
+
+  if (bHadOverlay) {
+    UE_LOG(LogProject, Display,
+           TEXT("Project viewport suppressed overlays for arena runtime."));
+  }
+}
+
 void UProjectGameViewportClient::MaybeShowStartupMenu() {
   if (bStartupMenuShown || !bShouldShowStartupMenu || !bStartupMenuEnabled) {
     return;
@@ -379,6 +481,18 @@ void UProjectGameViewportClient::MaybeShowStartupMenu() {
   if (!CurrentWorld || !CurrentWorld->IsGameWorld()) {
     return;
   }
+
+#if WITH_EDITOR
+  if (CurrentWorld->WorldType == EWorldType::PIE &&
+      CurrentWorld->GetNetMode() != NM_Standalone) {
+    bShouldShowStartupMenu = false;
+    bStartupMenuShown = true;
+    UE_LOG(LogProject, Display,
+           TEXT("Project viewport skipped startup menu for multiplayer PIE. NetMode=%d"),
+           static_cast<int32>(CurrentWorld->GetNetMode()));
+    return;
+  }
+#endif
 
   if (const UProjectSaveSubsystem *SaveSubsystem =
           GetGameInstance()
@@ -719,6 +833,12 @@ void UProjectGameViewportClient::ApplyOverlayInputState(
     return;
   }
 
+  UE_LOG(LogProject, Display,
+         TEXT("Project overlay input apply. Controller=%s OverlayState=%d MenuVisible=%s BlockInput=%s"),
+         *GetNameSafe(PlayerController), static_cast<int32>(OverlayState),
+         bMenuVisible ? TEXT("true") : TEXT("false"),
+         bBlockGameplayInput ? TEXT("true") : TEXT("false"));
+
   PlayerController->ResetIgnoreMoveInput();
   PlayerController->ResetIgnoreLookInput();
 
@@ -751,6 +871,10 @@ void UProjectGameViewportClient::RestoreOverlayInputState(
   if (!PlayerController) {
     return;
   }
+
+  UE_LOG(LogProject, Display,
+         TEXT("Project overlay input restore. Controller=%s"),
+         *GetNameSafe(PlayerController));
 
   PlayerController->ResetIgnoreMoveInput();
   PlayerController->ResetIgnoreLookInput();

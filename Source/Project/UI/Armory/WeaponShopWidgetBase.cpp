@@ -112,7 +112,8 @@ UWeaponShopWidgetBase::GetPendingAssignmentCompatibleSlots() const {
 bool UWeaponShopWidgetBase::CanPurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass,
                                               int32 Price) const {
   if (const UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent()) {
-    return ArmoryComponent->CanPurchaseWeapon(WeaponClass, Price);
+    return WeaponClass && Price >= 0 && !ArmoryComponent->HasOwnedWeapon(WeaponClass) &&
+           GetCurrentMoney() >= Price && ArmoryComponent->CanStoreWeapon(WeaponClass);
   }
 
   return false;
@@ -138,6 +139,16 @@ bool UWeaponShopWidgetBase::IsPurchaseFlowBlocked() const {
 
 bool UWeaponShopWidgetBase::PurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass,
                                            int32 Price) {
+  if (AMainPlayerController *MainPlayerController =
+          ResolveMainPlayerController()) {
+    if (MainPlayerController->RequestArenaPurchaseWeapon(
+            ShopTerminal.Get(), WeaponClass, Price)) {
+      PendingAssignmentWeaponClass = nullptr;
+      NotifyWidgetRefreshRequested();
+      return true;
+    }
+  }
+
   UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent();
   if (!ArmoryComponent || !ArmoryComponent->PurchaseWeapon(WeaponClass, Price)) {
     return false;

@@ -55,6 +55,8 @@ private:
   void RefreshAvailableSaveSlots();
   void BindMapLifecycleDelegates();
   void UnbindMapLifecycleDelegates();
+  bool IsArenaRuntimeWorld() const;
+  void SuppressOverlaysForArenaRuntime();
   void MaybeShowStartupMenu();
   void ShowStartupMenu();
   void ShowStartupSaveSelectionMenu();

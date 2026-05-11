@@ -1,9 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/HUD/CrosshairWidgetBase.h"
+#include "Arena/ArenaPlayerState.h"
 #include "Character/CurrencyComponent.h"
 #include "Character/HealthComponent.h"
 #include "Combat/CombatComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 
 int32 UCrosshairWidgetBase::GetAmmoMagazine() const {
@@ -72,6 +74,13 @@ bool UCrosshairWidgetBase::ShouldShowSniperScopeOverlay() const {
 }
 
 int32 UCrosshairWidgetBase::GetMoney() const {
+  if (const APlayerController *OwningPlayer = GetOwningPlayer()) {
+    if (const AArenaPlayerState *ArenaPlayerState =
+            OwningPlayer->GetPlayerState<AArenaPlayerState>()) {
+      return ArenaPlayerState->GetSpendableCurrency();
+    }
+  }
+
   if (const UCurrencyComponent *CurrencyComp = ResolveCurrencyComponent()) {
     return CurrencyComp->GetCurrency();
   }

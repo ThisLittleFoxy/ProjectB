@@ -57,6 +57,9 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Armory|Shop")
   bool PurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass, int32 Price);
 
+  UFUNCTION(BlueprintCallable, Category = "Armory|Shop")
+  bool GrantPurchasedWeapon(TSubclassOf<AWeaponBase> WeaponClass);
+
   UFUNCTION(BlueprintPure, Category = "Armory|Shop")
   bool CanStoreWeapon(TSubclassOf<AWeaponBase> WeaponClass) const;
 

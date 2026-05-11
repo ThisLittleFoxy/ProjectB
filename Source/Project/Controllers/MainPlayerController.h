@@ -7,6 +7,7 @@
 #include "MainPlayerController.generated.h"
 
 class AWeaponShopTerminal;
+class AWeaponBase;
 class UCrosshairWidgetBase;
 class UInputMappingContext;
 class UPlayerArmoryComponent;
@@ -26,6 +27,14 @@ public:
   UPlayerArmoryComponent *GetPlayerArmoryComponent() const {
     return PlayerArmoryComponent;
   }
+
+  UFUNCTION(BlueprintCallable, Category = "Arena|Ready")
+  bool RequestArenaReady(bool bReady);
+
+  UFUNCTION(BlueprintCallable, Category = "Arena|Shop")
+  bool RequestArenaPurchaseWeapon(AWeaponShopTerminal *ShopTerminal,
+                                  TSubclassOf<AWeaponBase> WeaponClass,
+                                  int32 ClientDisplayedPrice);
 
   UFUNCTION(BlueprintCallable, Category = "UI|Armory")
   void OpenWeaponShop(AWeaponShopTerminal *ShopTerminal);
@@ -142,14 +151,40 @@ protected:
   virtual void BeginPlay() override;
   virtual void SetupInputComponent() override;
   virtual void OnPossess(APawn *InPawn) override;
+  virtual void AcknowledgePossession(APawn *InPawn) override;
 
   bool ShouldUseTouchControls() const;
   void BindInputActions();
   void ApplyStartupPawnState(APawn *InPawn);
   void ConsumeSaveRestoreStartupSkip();
   void ApplyInventoryWidgetLayoutDefaults();
+  void ConfigurePawnForNetworkPresence(APawn *InPawn) const;
+  void RefreshReplicatedPawnVisuals() const;
+  void RestoreLocalGameplayInputState();
   void UpdateArmoryOverlayInputState();
   void CloseAllArmoryOverlays();
+
+  UFUNCTION(Server, Reliable)
+  void ServerSetArenaReady(bool bReady);
+
+  UFUNCTION(Server, Reliable)
+  void ServerRequestArenaPurchaseWeapon(AWeaponShopTerminal *ShopTerminal,
+                                        TSubclassOf<AWeaponBase> WeaponClass,
+                                        int32 ClientDisplayedPrice);
+
+  UFUNCTION(Client, Reliable)
+  void ClientArenaPurchaseWeaponResult(TSubclassOf<AWeaponBase> WeaponClass,
+                                       bool bSucceeded,
+                                       int32 RemainingSpendableCurrency);
+
+  bool HandleArenaPurchaseWeapon(AWeaponShopTerminal *ShopTerminal,
+                                 TSubclassOf<AWeaponBase> WeaponClass,
+                                 int32 ClientDisplayedPrice,
+                                 int32 &OutRemainingSpendableCurrency);
+
+  bool ResolveServerShopPrice(AWeaponShopTerminal *ShopTerminal,
+                              TSubclassOf<AWeaponBase> WeaponClass,
+                              int32 &OutPrice) const;
 
   UFUNCTION()
   void HandleMove(const FInputActionValue &Value);
@@ -209,6 +244,9 @@ protected:
 
   UPROPERTY(Transient)
   float LastWeaponCycleInputTimeSeconds = -1000.0f;
+
+  UPROPERTY(Transient)
+  float LastMoveDebugLogTimeSeconds = -1000.0f;
 
 public:
   UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")

@@ -1,12 +1,17 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Controllers/MainPlayerController.h"
+#include "Arena/ArenaGameMode.h"
+#include "Arena/ArenaPlayerState.h"
 #include "Blueprint/UserWidget.h"
 #include "Character/ControllableCharacterInterface.h"
 #include "Character/CurrencyComponent.h"
 #include "Combat/CombatComponent.h"
+#include "Combat/WeaponBase.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Character.h"
@@ -37,6 +42,39 @@ AMainPlayerController::AMainPlayerController() {
   CheatClass = UProjectCheatManager::StaticClass();
   PlayerArmoryComponent =
       CreateDefaultSubobject<UPlayerArmoryComponent>(TEXT("PlayerArmoryComponent"));
+}
+
+bool AMainPlayerController::RequestArenaReady(bool bReady) {
+  if (HasAuthority()) {
+    if (AArenaGameMode *ArenaGameMode =
+            GetWorld() ? GetWorld()->GetAuthGameMode<AArenaGameMode>() : nullptr) {
+      return ArenaGameMode->SetPlayerReady(this, bReady);
+    }
+
+    return false;
+  }
+
+  ServerSetArenaReady(bReady);
+  return true;
+}
+
+bool AMainPlayerController::RequestArenaPurchaseWeapon(
+    AWeaponShopTerminal *ShopTerminal, TSubclassOf<AWeaponBase> WeaponClass,
+    int32 ClientDisplayedPrice) {
+  if (!IsLocalController() || !WeaponClass) {
+    return false;
+  }
+
+  if (HasAuthority()) {
+    int32 RemainingSpendableCurrency = 0;
+    return HandleArenaPurchaseWeapon(ShopTerminal, WeaponClass,
+                                     ClientDisplayedPrice,
+                                     RemainingSpendableCurrency);
+  }
+
+  ServerRequestArenaPurchaseWeapon(ShopTerminal, WeaponClass,
+                                   ClientDisplayedPrice);
+  return true;
 }
 
 void AMainPlayerController::BeginPlay() {
@@ -71,6 +109,20 @@ void AMainPlayerController::BeginPlay() {
     } else {
       UE_LOG(LogProject, Error,
              TEXT("Could not spawn mobile controls widget."));
+    }
+  }
+
+  RestoreLocalGameplayInputState();
+  RefreshReplicatedPawnVisuals();
+
+  if (IsLocalController()) {
+    if (UWorld *World = GetWorld()) {
+      FTimerHandle RefreshVisualsTimerHandle;
+      World->GetTimerManager().SetTimer(
+          RefreshVisualsTimerHandle,
+          FTimerDelegate::CreateWeakLambda(
+              this, [this]() { RefreshReplicatedPawnVisuals(); }),
+          0.5f, true);
     }
   }
 }
@@ -152,10 +204,16 @@ void AMainPlayerController::BindInputActions() {
           ActionName.Contains(TEXT("IA_Move"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleMove);
+        UE_LOG(LogProject, Display,
+               TEXT("Bound move input action. Controller=%s Action=%s"),
+               *GetNameSafe(this), *ActionName);
       } else if (ActionName.Contains(TEXT("Look")) ||
                  ActionName.Contains(TEXT("IA_Look"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleLook);
+        UE_LOG(LogProject, Display,
+               TEXT("Bound look input action. Controller=%s Action=%s"),
+               *GetNameSafe(this), *ActionName);
       } else if (ActionName.Contains(TEXT("Jump")) ||
                  ActionName.Contains(TEXT("IA_Jump"))) {
         EnhancedInputComponent->BindAction(
@@ -260,6 +318,8 @@ void AMainPlayerController::OnPossess(APawn *InPawn) {
     return;
   }
 
+  ConfigurePawnForNetworkPresence(InPawn);
+
   if (ACharacter *PossessedCharacter = Cast<ACharacter>(InPawn)) {
     if (UCharacterMovementComponent *MovementComp =
             PossessedCharacter->GetCharacterMovement()) {
@@ -278,6 +338,20 @@ void AMainPlayerController::OnPossess(APawn *InPawn) {
   } else {
     ApplyStartupPawnState(InPawn);
   }
+}
+
+void AMainPlayerController::AcknowledgePossession(APawn *InPawn) {
+  Super::AcknowledgePossession(InPawn);
+
+  UE_LOG(LogProject, Display,
+         TEXT("MainPlayerController::AcknowledgePossession Controller=%s Pawn=%s Local=%s MoveIgnored=%s LookIgnored=%s"),
+         *GetNameSafe(this), *GetNameSafe(InPawn),
+         IsLocalController() ? TEXT("true") : TEXT("false"),
+         IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+         IsLookInputIgnored() ? TEXT("true") : TEXT("false"));
+
+  ConfigurePawnForNetworkPresence(InPawn);
+  RestoreLocalGameplayInputState();
 }
 
 void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
@@ -360,6 +434,178 @@ void AMainPlayerController::ApplyInventoryWidgetLayoutDefaults() {
       InventoryWidgetDefaults->GetConfiguredStorageGridRows());
 }
 
+void AMainPlayerController::ConfigurePawnForNetworkPresence(APawn *InPawn) const {
+  if (!InPawn) {
+    return;
+  }
+
+  if (HasAuthority()) {
+    InPawn->SetOwner(const_cast<AMainPlayerController *>(this));
+    if (!InPawn->GetIsReplicated()) {
+      InPawn->SetReplicates(true);
+    }
+    InPawn->SetReplicateMovement(true);
+
+    if (!IsLocalController()) {
+      InPawn->SetAutonomousProxy(true);
+    }
+
+    InPawn->ForceNetUpdate();
+
+    if (ACharacter *PossessedCharacter = Cast<ACharacter>(InPawn)) {
+      if (UCharacterMovementComponent *MovementComp =
+              PossessedCharacter->GetCharacterMovement()) {
+        MovementComp->SetIsReplicated(true);
+      }
+    }
+  }
+
+  TArray<USkeletalMeshComponent *> MeshComponents;
+  InPawn->GetComponents<USkeletalMeshComponent>(MeshComponents);
+
+  for (USkeletalMeshComponent *MeshComponent : MeshComponents) {
+    if (!MeshComponent) {
+      continue;
+    }
+
+    const FString MeshName = MeshComponent->GetName();
+    const bool bLooksFirstPerson =
+        MeshName.Contains(TEXT("FirstPerson"), ESearchCase::IgnoreCase) ||
+        MeshName.Contains(TEXT("Arms"), ESearchCase::IgnoreCase);
+
+    if (!MeshComponent->IsVisible() || MeshComponent->bHiddenInGame) {
+      MeshComponent->SetVisibility(true, false);
+      MeshComponent->SetHiddenInGame(false, false);
+      MeshComponent->MarkRenderStateDirty();
+
+      UE_LOG(LogProject, Display,
+             TEXT("Restored pawn mesh visibility. Pawn=%s Mesh=%s FirstPerson=%s"),
+             *GetNameSafe(InPawn), *GetNameSafe(MeshComponent),
+             bLooksFirstPerson ? TEXT("true") : TEXT("false"));
+    }
+
+    UE_LOG(LogProject, Display,
+           TEXT("Pawn mesh network presence. Pawn=%s Mesh=%s FirstPerson=%s OnlyOwnerSee=%s OwnerNoSee=%s Visible=%s HiddenInGame=%s AttachParent=%s"),
+           *GetNameSafe(InPawn), *GetNameSafe(MeshComponent),
+           bLooksFirstPerson ? TEXT("true") : TEXT("false"),
+           MeshComponent->bOnlyOwnerSee ? TEXT("true") : TEXT("false"),
+           MeshComponent->bOwnerNoSee ? TEXT("true") : TEXT("false"),
+           MeshComponent->IsVisible() ? TEXT("true") : TEXT("false"),
+           MeshComponent->bHiddenInGame ? TEXT("true") : TEXT("false"),
+           *GetNameSafe(MeshComponent->GetAttachParent()));
+  }
+
+  UE_LOG(LogProject, Display,
+         TEXT("Configured pawn network presence. Controller=%s Pawn=%s Owner=%s Authority=%s Local=%s Role=%d RemoteRole=%d Meshes=%d MoveIgnored=%s LookIgnored=%s"),
+         *GetNameSafe(this), *GetNameSafe(InPawn),
+         *GetNameSafe(InPawn->GetOwner()),
+         HasAuthority() ? TEXT("true") : TEXT("false"),
+         IsLocalController() ? TEXT("true") : TEXT("false"),
+         static_cast<int32>(InPawn->GetLocalRole()),
+         static_cast<int32>(InPawn->GetRemoteRole()), MeshComponents.Num(),
+         IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+         IsLookInputIgnored() ? TEXT("true") : TEXT("false"));
+}
+
+void AMainPlayerController::RefreshReplicatedPawnVisuals() const {
+  if (!IsLocalController()) {
+    return;
+  }
+
+  UWorld *World = GetWorld();
+  if (!World || World->WorldType != EWorldType::PIE) {
+    return;
+  }
+
+  APawn *LocalPawn = GetPawn();
+  for (TActorIterator<APawn> PawnIt(World); PawnIt; ++PawnIt) {
+    APawn *ObservedPawn = *PawnIt;
+    if (!IsValid(ObservedPawn)) {
+      continue;
+    }
+
+    const bool bIsLocalPawn =
+        ObservedPawn == LocalPawn || ObservedPawn->IsLocallyControlled();
+
+    TArray<USkeletalMeshComponent *> MeshComponents;
+    ObservedPawn->GetComponents<USkeletalMeshComponent>(MeshComponents);
+
+    for (USkeletalMeshComponent *MeshComponent : MeshComponents) {
+      if (!MeshComponent) {
+        continue;
+      }
+
+      const FString MeshName = MeshComponent->GetName();
+      const bool bLooksFirstPerson =
+          MeshName.Contains(TEXT("FirstPerson"), ESearchCase::IgnoreCase) ||
+          MeshName.Contains(TEXT("Arms"), ESearchCase::IgnoreCase);
+
+      if (bLooksFirstPerson) {
+        MeshComponent->SetOnlyOwnerSee(true);
+        MeshComponent->SetOwnerNoSee(false);
+      } else {
+        MeshComponent->SetOnlyOwnerSee(false);
+        MeshComponent->SetOwnerNoSee(true);
+      }
+
+      MeshComponent->SetVisibility(true, false);
+      MeshComponent->SetHiddenInGame(false, false);
+      MeshComponent->MarkRenderStateDirty();
+
+      UE_LOG(LogProject, Display,
+             TEXT("Refreshed replicated pawn visual. Viewer=%s Pawn=%s LocalPawn=%s Mesh=%s FirstPerson=%s OnlyOwnerSee=%s OwnerNoSee=%s Visible=%s HiddenInGame=%s SkeletalMesh=%s AnimClass=%s"),
+             *GetNameSafe(this), *GetNameSafe(ObservedPawn),
+             bIsLocalPawn ? TEXT("true") : TEXT("false"),
+             *GetNameSafe(MeshComponent),
+             bLooksFirstPerson ? TEXT("true") : TEXT("false"),
+             MeshComponent->bOnlyOwnerSee ? TEXT("true") : TEXT("false"),
+             MeshComponent->bOwnerNoSee ? TEXT("true") : TEXT("false"),
+             MeshComponent->IsVisible() ? TEXT("true") : TEXT("false"),
+             MeshComponent->bHiddenInGame ? TEXT("true") : TEXT("false"),
+             *GetNameSafe(MeshComponent->GetSkeletalMeshAsset()),
+             *GetNameSafe(MeshComponent->GetAnimClass()));
+    }
+  }
+}
+
+void AMainPlayerController::RestoreLocalGameplayInputState() {
+  if (!IsLocalController() || IsAnyArmoryOverlayOpen()) {
+    return;
+  }
+
+  ResetIgnoreMoveInput();
+  ResetIgnoreLookInput();
+  bShowMouseCursor = false;
+  bIsInteractingWithUI = false;
+
+  FInputModeGameOnly InputMode;
+  SetInputMode(InputMode);
+
+  if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
+    if (const UCharacterMovementComponent *MovementComp =
+            ControlledCharacter->GetCharacterMovement()) {
+      UE_LOG(LogProject, Display,
+             TEXT("Restored local gameplay input. Controller=%s Pawn=%s MoveIgnored=%s LookIgnored=%s MovementMode=%d MaxWalkSpeed=%.1f MovementEnabled=%s"),
+             *GetNameSafe(this), *GetNameSafe(ControlledCharacter),
+             IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+             IsLookInputIgnored() ? TEXT("true") : TEXT("false"),
+             static_cast<int32>(MovementComp->MovementMode),
+             MovementComp->MaxWalkSpeed,
+             (MovementComp->MovementMode != MOVE_None &&
+              MovementComp->UpdatedComponent)
+                 ? TEXT("true")
+                 : TEXT("false"));
+      return;
+    }
+  }
+
+  UE_LOG(LogProject, Display,
+         TEXT("Restored local gameplay input. Controller=%s Pawn=%s MoveIgnored=%s LookIgnored=%s"),
+         *GetNameSafe(this), *GetNameSafe(GetPawn()),
+         IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+         IsLookInputIgnored() ? TEXT("true") : TEXT("false"));
+}
+
 void AMainPlayerController::UpdateArmoryOverlayInputState() {
   const bool bOverlayOpen = IsAnyArmoryOverlayOpen();
   SetMouseCursorVisible(bOverlayOpen);
@@ -374,6 +620,141 @@ void AMainPlayerController::UpdateArmoryOverlayInputState() {
 void AMainPlayerController::CloseAllArmoryOverlays() {
   CloseWeaponShop();
   CloseInventory();
+}
+
+void AMainPlayerController::ServerSetArenaReady_Implementation(bool bReady) {
+  if (AArenaGameMode *ArenaGameMode =
+          GetWorld() ? GetWorld()->GetAuthGameMode<AArenaGameMode>() : nullptr) {
+    ArenaGameMode->SetPlayerReady(this, bReady);
+  }
+}
+
+void AMainPlayerController::ServerRequestArenaPurchaseWeapon_Implementation(
+    AWeaponShopTerminal *ShopTerminal, TSubclassOf<AWeaponBase> WeaponClass,
+    int32 ClientDisplayedPrice) {
+  int32 RemainingSpendableCurrency = 0;
+  const bool bSucceeded =
+      HandleArenaPurchaseWeapon(ShopTerminal, WeaponClass, ClientDisplayedPrice,
+                                RemainingSpendableCurrency);
+  ClientArenaPurchaseWeaponResult(WeaponClass, bSucceeded,
+                                  RemainingSpendableCurrency);
+}
+
+void AMainPlayerController::ClientArenaPurchaseWeaponResult_Implementation(
+    TSubclassOf<AWeaponBase> WeaponClass, bool bSucceeded,
+    int32 RemainingSpendableCurrency) {
+  if (PlayerArmoryComponent) {
+    if (bSucceeded && WeaponClass &&
+        !PlayerArmoryComponent->HasOwnedWeapon(WeaponClass)) {
+      PlayerArmoryComponent->GrantPurchasedWeapon(WeaponClass);
+    }
+  }
+
+  if (WeaponShopWidget) {
+    WeaponShopWidget->RequestWidgetRefresh();
+  }
+  if (InventoryWidget) {
+    InventoryWidget->RequestWidgetRefresh();
+  }
+
+  UE_LOG(LogProject, Display,
+         TEXT("ClientArenaPurchaseWeaponResult Player=%s Weapon=%s Success=%s Remaining=%d"),
+         *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
+         bSucceeded ? TEXT("true") : TEXT("false"),
+         RemainingSpendableCurrency);
+}
+
+bool AMainPlayerController::HandleArenaPurchaseWeapon(
+    AWeaponShopTerminal *ShopTerminal, TSubclassOf<AWeaponBase> WeaponClass,
+    int32 ClientDisplayedPrice, int32 &OutRemainingSpendableCurrency) {
+  OutRemainingSpendableCurrency = 0;
+
+  AArenaPlayerState *ArenaPlayerState = GetPlayerState<AArenaPlayerState>();
+  if (!ArenaPlayerState) {
+    return PlayerArmoryComponent &&
+           PlayerArmoryComponent->PurchaseWeapon(WeaponClass,
+                                                 FMath::Max(0, ClientDisplayedPrice));
+  }
+
+  OutRemainingSpendableCurrency = ArenaPlayerState->GetSpendableCurrency();
+
+  int32 ServerPrice = 0;
+  if (!ResolveServerShopPrice(ShopTerminal, WeaponClass, ServerPrice)) {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena purchase rejected: invalid shop offer. Player=%s Weapon=%s"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()));
+    return false;
+  }
+
+  if (ClientDisplayedPrice != ServerPrice) {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena purchase price mismatch. Player=%s Weapon=%s Client=%d Server=%d"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
+           ClientDisplayedPrice, ServerPrice);
+  }
+
+  if (!PlayerArmoryComponent || !WeaponClass || ServerPrice < 0 ||
+      PlayerArmoryComponent->HasOwnedWeapon(WeaponClass) ||
+      !PlayerArmoryComponent->CanStoreWeapon(WeaponClass) ||
+      ArenaPlayerState->GetSpendableCurrency() < ServerPrice) {
+    UE_LOG(LogProject, Display,
+           TEXT("Arena purchase rejected. Player=%s Weapon=%s Price=%d Spendable=%d"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()), ServerPrice,
+           ArenaPlayerState->GetSpendableCurrency());
+    return false;
+  }
+
+  const FArenaPlayerRunStats PreviousStats =
+      ArenaPlayerState->GetArenaRunStats();
+  if (!ArenaPlayerState->TrySpendArenaCurrency(ServerPrice)) {
+    return false;
+  }
+
+  if (!PlayerArmoryComponent->GrantPurchasedWeapon(WeaponClass)) {
+    ArenaPlayerState->SetArenaRuntimeCurrency(
+        PreviousStats.SpendableCurrency, PreviousStats.EarnedCurrency,
+        PreviousStats.CommittedCurrency);
+    OutRemainingSpendableCurrency = PreviousStats.SpendableCurrency;
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena purchase rolled back after grant failure. Player=%s Weapon=%s"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()));
+    return false;
+  }
+
+  OutRemainingSpendableCurrency = ArenaPlayerState->GetSpendableCurrency();
+
+  UE_LOG(LogProject, Display,
+         TEXT("Arena purchase accepted. Player=%s Weapon=%s Price=%d Remaining=%d"),
+         *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()), ServerPrice,
+         OutRemainingSpendableCurrency);
+  return true;
+}
+
+bool AMainPlayerController::ResolveServerShopPrice(
+    AWeaponShopTerminal *ShopTerminal, TSubclassOf<AWeaponBase> WeaponClass,
+    int32 &OutPrice) const {
+  OutPrice = 0;
+  if (!ShopTerminal || !WeaponClass) {
+    return false;
+  }
+
+  const TArray<FWeaponShopOffer> ShopOffers = ShopTerminal->GetShopOffers();
+  for (const FWeaponShopOffer &Offer : ShopOffers) {
+    if (Offer.WeaponClass != WeaponClass) {
+      continue;
+    }
+
+    if (Offer.bOverridePrice) {
+      OutPrice = FMath::Max(0, Offer.Price);
+      return true;
+    }
+
+    const AWeaponBase *WeaponCDO = WeaponClass->GetDefaultObject<AWeaponBase>();
+    OutPrice = WeaponCDO ? FMath::Max(0, WeaponCDO->GetWeaponShopPrice()) : 0;
+    return WeaponCDO != nullptr;
+  }
+
+  return false;
 }
 
 void AMainPlayerController::OpenWeaponShop(AWeaponShopTerminal *ShopTerminal) {
@@ -485,6 +866,31 @@ void AMainPlayerController::HandleMove(const FInputActionValue &Value) {
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
   const FVector RightDirection =
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+  if (const UWorld *World = GetWorld()) {
+    const float TimeSeconds = World->GetTimeSeconds();
+    if (TimeSeconds - LastMoveDebugLogTimeSeconds >= 1.0f) {
+      LastMoveDebugLogTimeSeconds = TimeSeconds;
+
+      const UCharacterMovementComponent *MovementComp = nullptr;
+      if (const ACharacter *ControlledCharacter = Cast<ACharacter>(ControlledPawn)) {
+        MovementComp = ControlledCharacter->GetCharacterMovement();
+      }
+
+      UE_LOG(LogProject, Display,
+             TEXT("HandleMove input. Controller=%s Pawn=%s NetMode=%d Local=%s Role=%d RemoteRole=%d Value=(%.2f, %.2f) MoveIgnored=%s MovementMode=%d MaxWalkSpeed=%.1f Location=%s"),
+             *GetNameSafe(this), *GetNameSafe(ControlledPawn),
+             GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
+             IsLocalController() ? TEXT("true") : TEXT("false"),
+             static_cast<int32>(ControlledPawn->GetLocalRole()),
+             static_cast<int32>(ControlledPawn->GetRemoteRole()),
+             MovementVector.X, MovementVector.Y,
+             IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+             MovementComp ? static_cast<int32>(MovementComp->MovementMode) : -1,
+             MovementComp ? MovementComp->MaxWalkSpeed : 0.0f,
+             *ControlledPawn->GetActorLocation().ToCompactString());
+    }
+  }
 
   ControlledPawn->AddMovementInput(ForwardDirection, MovementVector.Y);
   ControlledPawn->AddMovementInput(RightDirection, MovementVector.X);

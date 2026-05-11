@@ -42,6 +42,10 @@ public:
   UFUNCTION(Exec, Category = "Debug")
   void KillCrosshair();
 
+  /** Instantly kill the controlled pawn for arena death flow testing */
+  UFUNCTION(Exec, Category = "Debug")
+  void ArenaKillSelf();
+
 private:
   APawn *GetControlledPawn() const;
 };

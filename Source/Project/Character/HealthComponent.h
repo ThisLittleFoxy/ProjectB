@@ -128,6 +128,7 @@ private:
                                 AActor *DamageCauser);
 
   void HandleDeath();
+  bool HandleArenaPlayerDeath(AActor *OwnerActor);
   void GrantDeathCurrencyReward(AController *InstigatedBy, AActor *DamageCauser);
 
   float SetHealth(float NewHealth);

@@ -217,6 +217,30 @@ bool UPlayerArmoryComponent::PurchaseWeapon(TSubclassOf<AWeaponBase> WeaponClass
   return true;
 }
 
+bool UPlayerArmoryComponent::GrantPurchasedWeapon(
+    TSubclassOf<AWeaponBase> WeaponClass) {
+  if (!bHasInitializedSessionState || !WeaponClass ||
+      HasOwnedWeapon(WeaponClass)) {
+    return false;
+  }
+
+  FInventoryItemInstance NewItem;
+  if (!BuildWeaponItemInstance(WeaponClass, NewItem)) {
+    return false;
+  }
+
+  FInventoryGridPlacement Placement;
+  if (!FindFirstFit(NewItem, Placement)) {
+    return false;
+  }
+
+  NewItem.Container = EInventoryItemContainer::StorageGrid;
+  NewItem.GridPlacement = Placement;
+  OwnedItems.Add(MoveTemp(NewItem));
+  BroadcastArmoryChanged();
+  return true;
+}
+
 bool UPlayerArmoryComponent::CanStoreWeapon(
     TSubclassOf<AWeaponBase> WeaponClass) const {
   FInventoryItemInstance PendingWeaponItem;

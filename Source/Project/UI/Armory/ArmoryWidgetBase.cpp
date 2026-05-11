@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/Armory/ArmoryWidgetBase.h"
+#include "Arena/ArenaPlayerState.h"
 #include "Combat/WeaponBase.h"
 #include "Controllers/MainPlayerController.h"
 #include "Inventory/PlayerArmoryComponent.h"
@@ -32,6 +33,14 @@ UPlayerArmoryComponent *UArmoryWidgetBase::GetArmoryComponent() const {
 }
 
 int32 UArmoryWidgetBase::GetCurrentMoney() const {
+  if (const AMainPlayerController *MainPlayerController =
+          ResolveMainPlayerController()) {
+    if (const AArenaPlayerState *ArenaPlayerState =
+            MainPlayerController->GetPlayerState<AArenaPlayerState>()) {
+      return ArenaPlayerState->GetSpendableCurrency();
+    }
+  }
+
   if (const UPlayerArmoryComponent *ArmoryComponent = GetArmoryComponent()) {
     return ArmoryComponent->GetCurrency();
   }

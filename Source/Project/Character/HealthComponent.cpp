@@ -1,10 +1,14 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Character/HealthComponent.h"
+#include "Arena/ArenaGameMode.h"
+#include "Arena/ArenaGameState.h"
+#include "Arena/ArenaPlayerState.h"
 #include "Character/CurrencyComponent.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
 #include "Math/UnrealMathUtility.h"
 #include "Project.h"
 
@@ -112,9 +116,29 @@ void UHealthComponent::GrantDeathCurrencyReward(AController *InstigatedBy,
     return;
   }
 
+  AController *RewardController = InstigatedBy;
+  if (!RewardController && DamageCauser) {
+    RewardController = DamageCauser->GetInstigatorController();
+  }
+
+  UWorld *World = GetWorld();
+  if (World && World->GetGameState<AArenaGameState>()) {
+    if (const APawn *OwnerPawn = Cast<APawn>(GetOwner())) {
+      if (OwnerPawn->GetPlayerState<AArenaPlayerState>()) {
+        return;
+      }
+    }
+
+    if (AArenaGameMode *ArenaGameMode = World->GetAuthGameMode<AArenaGameMode>()) {
+      ArenaGameMode->ReportArenaThreatKilled(GetOwner(), RewardController,
+                                             CurrencyRewardOnDeath);
+    }
+    return;
+  }
+
   AActor *RewardReceiver = nullptr;
-  if (InstigatedBy) {
-    RewardReceiver = InstigatedBy->GetPawn();
+  if (RewardController) {
+    RewardReceiver = RewardController->GetPawn();
   }
 
   if (!RewardReceiver && DamageCauser) {
@@ -145,6 +169,10 @@ void UHealthComponent::HandleDeath() {
     return;
   }
 
+  if (HandleArenaPlayerDeath(OwnerActor)) {
+    return;
+  }
+
   OwnerActor->SetCanBeDamaged(false);
 
   if (bHideActorOnDeath) {
@@ -163,6 +191,29 @@ void UHealthComponent::HandleDeath() {
   }
 
   OwnerActor->SetLifeSpan(LifeSpan);
+}
+
+bool UHealthComponent::HandleArenaPlayerDeath(AActor *OwnerActor) {
+  UWorld *World = GetWorld();
+  if (!World || !World->GetGameState<AArenaGameState>() || !OwnerActor) {
+    return false;
+  }
+
+  APawn *OwnerPawn = Cast<APawn>(OwnerActor);
+  if (!OwnerPawn || !OwnerPawn->GetPlayerState<AArenaPlayerState>()) {
+    return false;
+  }
+
+  OwnerActor->SetCanBeDamaged(false);
+
+  if (AArenaGameMode *ArenaGameMode = World->GetAuthGameMode<AArenaGameMode>()) {
+    ArenaGameMode->ReportArenaPlayerDied(OwnerPawn->GetController(),
+                                         OwnerActor);
+  }
+
+  OwnerActor->SetCanBeDamaged(true);
+  SetHealth(MaxHealth);
+  return true;
 }
 
 float UHealthComponent::SetHealth(float NewHealth) {
