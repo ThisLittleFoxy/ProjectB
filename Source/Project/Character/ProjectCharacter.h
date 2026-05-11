@@ -26,6 +26,9 @@ class PROJECT_API AProjectCharacter : public ACharacter {
 public:
   AProjectCharacter();
 
+  virtual void GetLifetimeReplicatedProps(
+      TArray<FLifetimeProperty> &OutLifetimeProps) const override;
+
   UFUNCTION(BlueprintPure, Category = "Character|Components")
   UCameraComponent *GetFirstPersonCameraComponent() const {
     return FirstPersonCameraComponent;
@@ -125,6 +128,17 @@ protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Movement")
   bool bCanSprint = true;
 
-  UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Character|Movement")
+  UPROPERTY(ReplicatedUsing = OnRep_WantsToSprint, VisibleInstanceOnly,
+            BlueprintReadOnly, Category = "Character|Movement")
   bool bWantsToSprint = false;
+
+private:
+  UFUNCTION(Server, Reliable)
+  void ServerSetWantsToSprint(bool bNewWantsToSprint);
+
+  UFUNCTION()
+  void OnRep_WantsToSprint();
+
+  void SetWantsToSprint(bool bNewWantsToSprint);
+  void ApplyMovementSpeed();
 };

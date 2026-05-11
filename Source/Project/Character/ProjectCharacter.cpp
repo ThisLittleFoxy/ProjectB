@@ -10,6 +10,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interaction/InteractionComponent.h"
+#include "Net/UnrealNetwork.h"
 
 AProjectCharacter::AProjectCharacter() {
   PrimaryActorTick.bCanEverTick = false;
@@ -59,32 +60,33 @@ AProjectCharacter::AProjectCharacter() {
 void AProjectCharacter::BeginPlay() {
   Super::BeginPlay();
 
-  if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
-    MovementComponent->MaxWalkSpeed = WalkSpeed;
-  }
+  ApplyMovementSpeed();
 
   if (FirstPersonCameraComponent) {
     FirstPersonCameraComponent->SetFieldOfView(DefaultFieldOfView);
   }
 }
 
+void AProjectCharacter::GetLifetimeReplicatedProps(
+    TArray<FLifetimeProperty> &OutLifetimeProps) const {
+  Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+  DOREPLIFETIME(AProjectCharacter, bWantsToSprint);
+}
+
 void AProjectCharacter::RequestStartSprint() {
-  if (!bCanSprint) {
-    return;
-  }
+  SetWantsToSprint(true);
 
-  bWantsToSprint = true;
-
-  if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
-    MovementComponent->MaxWalkSpeed = SprintSpeed;
+  if (!HasAuthority()) {
+    ServerSetWantsToSprint(true);
   }
 }
 
 void AProjectCharacter::RequestStopSprint() {
-  bWantsToSprint = false;
+  SetWantsToSprint(false);
 
-  if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
-    MovementComponent->MaxWalkSpeed = WalkSpeed;
+  if (!HasAuthority()) {
+    ServerSetWantsToSprint(false);
   }
 }
 
@@ -128,4 +130,30 @@ bool AProjectCharacter::EquipNextWeapon() {
 
 bool AProjectCharacter::EquipPreviousWeapon() {
   return CombatComponent ? CombatComponent->EquipPreviousWeapon() : false;
+}
+
+void AProjectCharacter::ServerSetWantsToSprint_Implementation(
+    bool bNewWantsToSprint) {
+  SetWantsToSprint(bNewWantsToSprint);
+}
+
+void AProjectCharacter::OnRep_WantsToSprint() {
+  ApplyMovementSpeed();
+}
+
+void AProjectCharacter::SetWantsToSprint(bool bNewWantsToSprint) {
+  const bool bNewSprintState = bCanSprint && bNewWantsToSprint;
+  if (bWantsToSprint == bNewSprintState) {
+    ApplyMovementSpeed();
+    return;
+  }
+
+  bWantsToSprint = bNewSprintState;
+  ApplyMovementSpeed();
+}
+
+void AProjectCharacter::ApplyMovementSpeed() {
+  if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
+    MovementComponent->MaxWalkSpeed = bWantsToSprint ? SprintSpeed : WalkSpeed;
+  }
 }
