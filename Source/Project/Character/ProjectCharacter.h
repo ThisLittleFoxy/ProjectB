@@ -90,6 +90,9 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Character|Combat")
   bool EquipPreviousWeapon();
 
+  UFUNCTION(BlueprintPure, Category = "Character|Movement")
+  bool WantsToSprint() const { return bWantsToSprint; }
+
 protected:
   virtual void BeginPlay() override;
 
@@ -117,14 +120,21 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   TObjectPtr<UCurrencyComponent> CurrencyComponent;
 
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Movement",
-            meta = (ClampMin = "0.0"))
-  float WalkSpeed = 600.0f;
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Camera",
+            meta = (ClampMin = "1.0", ClampMax = "179.0"))
+  float DefaultFieldOfView = 90.0f;
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Movement",
             meta = (ClampMin = "0.0"))
-  float SprintSpeed = 900.0f;
+  float WalkSpeed = 500.0f;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Movement",
+            meta = (ClampMin = "0.0"))
+  float SprintSpeed = 800.0f;
 
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character|Movement")
   bool bCanSprint = true;
+
+  UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Character|Movement")
+  bool bWantsToSprint = false;
 };

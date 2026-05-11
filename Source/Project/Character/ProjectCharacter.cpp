@@ -62,6 +62,10 @@ void AProjectCharacter::BeginPlay() {
   if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
     MovementComponent->MaxWalkSpeed = WalkSpeed;
   }
+
+  if (FirstPersonCameraComponent) {
+    FirstPersonCameraComponent->SetFieldOfView(DefaultFieldOfView);
+  }
 }
 
 void AProjectCharacter::HandleMovementInput_Implementation(
@@ -94,12 +98,16 @@ void AProjectCharacter::RequestStartSprint() {
     return;
   }
 
+  bWantsToSprint = true;
+
   if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
     MovementComponent->MaxWalkSpeed = SprintSpeed;
   }
 }
 
 void AProjectCharacter::RequestStopSprint() {
+  bWantsToSprint = false;
+
   if (UCharacterMovementComponent *MovementComponent = GetCharacterMovement()) {
     MovementComponent->MaxWalkSpeed = WalkSpeed;
   }
