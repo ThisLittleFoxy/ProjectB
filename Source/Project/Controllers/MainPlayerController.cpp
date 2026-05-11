@@ -4,8 +4,8 @@
 #include "Arena/ArenaGameMode.h"
 #include "Arena/ArenaPlayerState.h"
 #include "Blueprint/UserWidget.h"
-#include "Character/ControllableCharacterInterface.h"
 #include "Character/CurrencyComponent.h"
+#include "Character/ProjectCharacter.h"
 #include "Combat/CombatComponent.h"
 #include "Combat/WeaponBase.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -390,9 +390,13 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
     return;
   }
 
+  const AProjectCharacter *ProjectCharacter = Cast<AProjectCharacter>(InPawn);
+
   if (bClearStartingLoadoutOnPossess) {
-    if (UCombatComponent *CombatComp =
-            InPawn->FindComponentByClass<UCombatComponent>()) {
+    UCombatComponent *CombatComp =
+        ProjectCharacter ? ProjectCharacter->GetCombatComponent()
+                         : InPawn->FindComponentByClass<UCombatComponent>();
+    if (CombatComp) {
       CombatComp->ClearLoadout();
     }
   }
@@ -400,9 +404,13 @@ void AMainPlayerController::ApplyStartupPawnState(APawn *InPawn) {
   int32 InitialCurrency = 0;
   if (bSetStartingCurrencyOnPossess) {
     InitialCurrency = StartingCurrency;
-  } else if (const UCurrencyComponent *CurrencyComp =
-                 InPawn->FindComponentByClass<UCurrencyComponent>()) {
-    InitialCurrency = CurrencyComp->GetCurrency();
+  } else {
+    const UCurrencyComponent *CurrencyComp =
+        ProjectCharacter ? ProjectCharacter->GetCurrencyComponent()
+                         : InPawn->FindComponentByClass<UCurrencyComponent>();
+    if (CurrencyComp) {
+      InitialCurrency = CurrencyComp->GetCurrency();
+    }
   }
 
   PlayerArmoryComponent->InitializeEmptySession(InitialCurrency);
@@ -920,9 +928,15 @@ void AMainPlayerController::HandleSprintStarted(const FInputActionValue &Value) 
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StartSprint(ControlledPawn);
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->RequestStartSprint();
+    return;
   }
+
+  UE_LOG(LogProject, Verbose,
+         TEXT("Sprint input ignored because pawn is not AProjectCharacter. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleSprintCompleted(const FInputActionValue &Value) {
@@ -931,9 +945,15 @@ void AMainPlayerController::HandleSprintCompleted(const FInputActionValue &Value
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StopSprint(ControlledPawn);
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->RequestStopSprint();
+    return;
   }
+
+  UE_LOG(LogProject, Verbose,
+         TEXT("Stop sprint input ignored because pawn is not AProjectCharacter. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
@@ -946,15 +966,21 @@ void AMainPlayerController::HandleInteract(const FInputActionValue &Value) {
     return;
   }
 
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->RequestInteract();
+    return;
+  }
+
   if (UInteractionComponent *InteractionComp =
           ControlledPawn->FindComponentByClass<UInteractionComponent>()) {
     InteractionComp->TryInteract();
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_DoInteract(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Interact input ignored because pawn has no interaction path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
@@ -967,15 +993,21 @@ void AMainPlayerController::HandleFireStarted(const FInputActionValue &Value) {
     return;
   }
 
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->RequestStartFire();
+    return;
+  }
+
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StartFire();
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StartFire(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Fire input ignored because pawn has no combat path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleFireCompleted(const FInputActionValue &Value) {
@@ -988,15 +1020,21 @@ void AMainPlayerController::HandleFireCompleted(const FInputActionValue &Value) 
     return;
   }
 
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->RequestStopFire();
+    return;
+  }
+
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StopFire();
     return;
   }
 
-  if (ControlledPawn->Implements<UControllableCharacterInterface>()) {
-    IControllableCharacterInterface::Execute_StopFire(ControlledPawn);
-  }
+  UE_LOG(LogProject, Verbose,
+         TEXT("Stop fire input ignored because pawn has no combat path. Pawn=%s"),
+         *GetNameSafe(ControlledPawn));
 }
 
 void AMainPlayerController::HandleReload(const FInputActionValue &Value) {
@@ -1006,6 +1044,12 @@ void AMainPlayerController::HandleReload(const FInputActionValue &Value) {
 
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
+    return;
+  }
+
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->Reload();
     return;
   }
 
@@ -1025,6 +1069,12 @@ void AMainPlayerController::HandleScopeStarted(const FInputActionValue &Value) {
     return;
   }
 
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->StartScope();
+    return;
+  }
+
   if (UCombatComponent *CombatComp =
           ControlledPawn->FindComponentByClass<UCombatComponent>()) {
     CombatComp->StartScope();
@@ -1038,6 +1088,12 @@ void AMainPlayerController::HandleScopeCompleted(const FInputActionValue &Value)
 
   APawn *ControlledPawn = GetPawn();
   if (!ControlledPawn) {
+    return;
+  }
+
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    ProjectCharacter->StopScope();
     return;
   }
 
@@ -1069,6 +1125,16 @@ void AMainPlayerController::HandleWeaponCycle(const FInputActionValue &Value) {
       return;
     }
     LastWeaponCycleInputTimeSeconds = TimeSeconds;
+  }
+
+  if (AProjectCharacter *ProjectCharacter =
+          Cast<AProjectCharacter>(ControlledPawn)) {
+    if (CycleValue > 0.0f) {
+      ProjectCharacter->EquipNextWeapon();
+    } else {
+      ProjectCharacter->EquipPreviousWeapon();
+    }
+    return;
   }
 
   if (UCombatComponent *CombatComp =

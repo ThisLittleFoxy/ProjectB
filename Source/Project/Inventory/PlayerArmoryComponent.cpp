@@ -2,6 +2,7 @@
 
 #include "Inventory/PlayerArmoryComponent.h"
 #include "Character/CurrencyComponent.h"
+#include "Character/ProjectCharacter.h"
 #include "Combat/CombatComponent.h"
 #include "Combat/WeaponBase.h"
 #include "GameFramework/Pawn.h"
@@ -49,8 +50,15 @@ void UPlayerArmoryComponent::BindToPawn(APawn *NewPawn) {
   BoundCombatComponent = nullptr;
 
   if (BoundPawn.IsValid()) {
-    BoundCurrencyComponent = BoundPawn->FindComponentByClass<UCurrencyComponent>();
-    BoundCombatComponent = BoundPawn->FindComponentByClass<UCombatComponent>();
+    if (const AProjectCharacter *ProjectCharacter =
+            Cast<AProjectCharacter>(BoundPawn.Get())) {
+      BoundCurrencyComponent = ProjectCharacter->GetCurrencyComponent();
+      BoundCombatComponent = ProjectCharacter->GetCombatComponent();
+    } else {
+      BoundCurrencyComponent =
+          BoundPawn->FindComponentByClass<UCurrencyComponent>();
+      BoundCombatComponent = BoundPawn->FindComponentByClass<UCombatComponent>();
+    }
     BindCurrencyComponent(BoundCurrencyComponent.Get());
   } else {
     BoundCurrencyComponent.Reset();
@@ -73,7 +81,10 @@ void UPlayerArmoryComponent::ApplyStateToBoundPawn() {
   }
 
   if (!BoundCombatComponent.IsValid()) {
-    BoundCombatComponent = BoundPawn->FindComponentByClass<UCombatComponent>();
+    BoundCombatComponent =
+        Cast<AProjectCharacter>(BoundPawn.Get())
+            ? Cast<AProjectCharacter>(BoundPawn.Get())->GetCombatComponent()
+            : BoundPawn->FindComponentByClass<UCombatComponent>();
   }
   if (!BoundCombatComponent.IsValid()) {
     BroadcastArmoryChanged();
@@ -589,9 +600,15 @@ void UPlayerArmoryComponent::UnbindCurrencyComponent() {
 
 void UPlayerArmoryComponent::SyncRuntimeWeaponStateFromBoundPawn() {
   if (!BoundCombatComponent.IsValid()) {
-    BoundCombatComponent = BoundPawn.IsValid()
-                               ? BoundPawn->FindComponentByClass<UCombatComponent>()
-                               : nullptr;
+    if (const AProjectCharacter *ProjectCharacter =
+            BoundPawn.IsValid() ? Cast<AProjectCharacter>(BoundPawn.Get())
+                                : nullptr) {
+      BoundCombatComponent = ProjectCharacter->GetCombatComponent();
+    } else {
+      BoundCombatComponent = BoundPawn.IsValid()
+                                 ? BoundPawn->FindComponentByClass<UCombatComponent>()
+                                 : nullptr;
+    }
   }
 
   if (!BoundCombatComponent.IsValid()) {

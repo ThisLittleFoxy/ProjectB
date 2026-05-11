@@ -4,6 +4,7 @@
 #include "Arena/ArenaPlayerState.h"
 #include "Character/CurrencyComponent.h"
 #include "Character/HealthComponent.h"
+#include "Character/ProjectCharacter.h"
 #include "Combat/CombatComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -114,25 +115,41 @@ void UCrosshairWidgetBase::RefreshCachedComponents() const {
     return;
   }
 
+  const AProjectCharacter *ProjectCharacter =
+      Cast<AProjectCharacter>(OwningPawn);
+
   if (CachedOwningPawn.Get() != OwningPawn) {
     CachedOwningPawn = OwningPawn;
-    CachedCombatComponent = OwningPawn->FindComponentByClass<UCombatComponent>();
-    CachedCurrencyComponent =
-        OwningPawn->FindComponentByClass<UCurrencyComponent>();
-    CachedHealthComponent = OwningPawn->FindComponentByClass<UHealthComponent>();
+    if (ProjectCharacter) {
+      CachedCombatComponent = ProjectCharacter->GetCombatComponent();
+      CachedCurrencyComponent = ProjectCharacter->GetCurrencyComponent();
+      CachedHealthComponent = ProjectCharacter->GetHealthComponent();
+    } else {
+      CachedCombatComponent = OwningPawn->FindComponentByClass<UCombatComponent>();
+      CachedCurrencyComponent =
+          OwningPawn->FindComponentByClass<UCurrencyComponent>();
+      CachedHealthComponent = OwningPawn->FindComponentByClass<UHealthComponent>();
+    }
     return;
   }
 
   if (!CachedCombatComponent.IsValid()) {
-    CachedCombatComponent = OwningPawn->FindComponentByClass<UCombatComponent>();
+    CachedCombatComponent = ProjectCharacter
+                                ? ProjectCharacter->GetCombatComponent()
+                                : OwningPawn->FindComponentByClass<UCombatComponent>();
   }
 
   if (!CachedCurrencyComponent.IsValid()) {
-    CachedCurrencyComponent = OwningPawn->FindComponentByClass<UCurrencyComponent>();
+    CachedCurrencyComponent =
+        ProjectCharacter
+            ? ProjectCharacter->GetCurrencyComponent()
+            : OwningPawn->FindComponentByClass<UCurrencyComponent>();
   }
 
   if (!CachedHealthComponent.IsValid()) {
-    CachedHealthComponent = OwningPawn->FindComponentByClass<UHealthComponent>();
+    CachedHealthComponent = ProjectCharacter
+                                ? ProjectCharacter->GetHealthComponent()
+                                : OwningPawn->FindComponentByClass<UHealthComponent>();
   }
 }
 
