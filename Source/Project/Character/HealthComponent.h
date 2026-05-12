@@ -68,6 +68,9 @@ public:
   UFUNCTION(BlueprintPure, Category = "Health")
   bool IsAlive() const { return CurrentHealth > 0.0f; }
 
+  UFUNCTION(BlueprintPure, Category = "Health|Damage Rules")
+  bool AcceptsFriendlyFireDamage() const { return bAcceptFriendlyFireDamage; }
+
 protected:
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health",
             meta = (ClampMin = "1.0"))
@@ -83,6 +86,9 @@ protected:
    */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health")
   bool bInitializeFromMaxHealthOnBeginPlay = true;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Damage Rules")
+  bool bAcceptFriendlyFireDamage = true;
 
   /** Hide actor and disable collision immediately when HP reaches 0 */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Death")

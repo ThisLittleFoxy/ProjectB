@@ -5,6 +5,7 @@
 #include "Combat/HitZoneComponent.h"
 #include "Combat/WeaponLoadoutTypes.h"
 #include "CoreMinimal.h"
+#include "Engine/NetSerialization.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
 #include "Save/WeaponAmmoSaveData.h"
@@ -23,6 +24,26 @@ enum class EWeaponFireMode : uint8 {
   SemiAuto UMETA(DisplayName = "Semi Auto"),
   FullAuto UMETA(DisplayName = "Full Auto")
 };
+
+USTRUCT(BlueprintType)
+struct PROJECT_API FWeaponFireCosmeticEvent {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly, Category = "Weapon|FX")
+  bool bDryFire = false;
+
+  UPROPERTY(BlueprintReadOnly, Category = "Weapon|FX")
+  bool bHit = false;
+
+  UPROPERTY(BlueprintReadOnly, Category = "Weapon|FX")
+  FVector_NetQuantize Location = FVector::ZeroVector;
+
+  UPROPERTY(BlueprintReadOnly, Category = "Weapon|FX")
+  FVector_NetQuantizeNormal Normal = FVector::UpVector;
+};
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnWeaponFireCosmeticEvent, AWeaponBase *,
+                                     const FWeaponFireCosmeticEvent &);
 
 /**
  * Data-driven hitscan weapon.
@@ -53,6 +74,9 @@ public:
   /** Single shot (used for semi-auto and auto timer tick) */
   UFUNCTION(BlueprintCallable, Category = "Weapon|Fire")
   bool FireOnce();
+
+  void PlayFireCosmetics(const FWeaponFireCosmeticEvent &FireEvent);
+  void PlayReloadCosmetics();
 
   /** Simple instant reload from reserve */
   UFUNCTION(BlueprintCallable, Category = "Weapon|Ammo")
@@ -115,6 +139,8 @@ public:
   UFUNCTION(BlueprintPure, Category = "Weapon|Damage")
   float GetDamageMultiplierForZone(EHitZone Zone) const;
 
+  FOnWeaponFireCosmeticEvent OnWeaponFireCosmeticEvent;
+
   /** Called after each successful shot recoil calculation (for BP visual effects) */
   UFUNCTION(BlueprintImplementableEvent, Category = "Weapon|Recoil")
   void BP_OnRecoilApplied(float RecoilYawDeg, float RecoilPitchDeg);
@@ -172,6 +198,9 @@ protected:
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Damage",
             meta = (ClampMin = "0.0"))
   float DefaultZoneDamageMultiplier = 1.0f;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Damage")
+  bool bBypassFriendlyFireRules = false;
 
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Fire",
             meta = (ClampMin = "100.0"))
@@ -316,6 +345,9 @@ protected:
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|FX")
   TObjectPtr<USoundBase> DryFireSound;
 
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|FX")
+  TObjectPtr<USoundBase> ReloadSound;
+
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Debug")
   bool bDrawDebugTrace = false;
 
@@ -347,6 +379,8 @@ private:
   APlayerController *ResolveLocalPlayerController();
   AController *GetOwningController() const;
   FVector GetMuzzleLocation() const;
+  bool ShouldApplyAuthoritativeDamage() const;
+  bool ShouldApplyDamageToActor(const AActor *HitActor) const;
   bool MakeShotTrace(FHitResult &OutHit, FVector &OutTraceStart,
                      FVector &OutTraceEnd,
                      const FVector2D &RecoilOffsetDeg) const;

@@ -5,6 +5,9 @@
 #include "GameFramework/Character.h"
 
 AWeaponShopTerminal::AWeaponShopTerminal() {
+  bReplicates = true;
+  SetReplicateMovement(false);
+
   InteractionName = ShopDisplayName;
   InteractionAction = ShopActionText;
 }

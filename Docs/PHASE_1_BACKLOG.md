@@ -167,10 +167,12 @@
 - `GA-05 Threat Death And Rewards` реализован и описан в [Threat Death And Rewards](THREAT_DEATH_AND_REWARDS.md).
 - `GA-06 Player Death / Lobby Return` реализован и описан в [Player Death And Lobby Return](PLAYER_DEATH_AND_LOBBY_RETURN.md).
 - `MP-01 Replicated Player Presence` реализован и описан в [Replicated Player Presence](REPLICATED_PLAYER_PRESENCE.md).
+- `MP-02 Replicated Weapon Presence` реализован и описан в [Replicated Weapon Presence](REPLICATED_WEAPON_PRESENCE.md).
+- `MP-03 Replicated Combat Events` реализован и описан в [Replicated Combat Events](REPLICATED_COMBAT_EVENTS.md).
 
 Текущий task:
-- `MP-02 Replicated Weapon Presence` - выбран как следующий multiplayer slice.
+- `MP-04 Combat Damage Authority` - следующий multiplayer slice.
 
-Следующий task после MP-02:
-- `MP-03 Replicated Combat Events`, если weapon presence работает стабильно;
+Следующий task после MP-04:
+- `MP-05 Player Animation/State Polish`, если damage authority работает стабильно;
 - `Wave-01 Arena Wave Director`, если решим временно переключиться на wave spawning.

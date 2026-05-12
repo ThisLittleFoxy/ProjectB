@@ -59,9 +59,7 @@ TArray<FWeaponShopOfferViewData> UWeaponShopWidgetBase::GetShopOfferViewData() c
     OfferViewData.bAffordable = CurrentMoney >= EffectivePrice;
     OfferViewData.bFitsInInventory =
         ArmoryComponent && ArmoryComponent->CanStoreWeapon(Offer.WeaponClass);
-    OfferViewData.bCanPurchase =
-        ArmoryComponent &&
-        ArmoryComponent->CanPurchaseWeapon(Offer.WeaponClass, EffectivePrice);
+    OfferViewData.bCanPurchase = CanPurchaseWeapon(Offer.WeaponClass, EffectivePrice);
 
     ViewData.Add(OfferViewData);
   }

@@ -77,6 +77,34 @@ bool AMainPlayerController::RequestArenaPurchaseWeapon(
   return true;
 }
 
+bool AMainPlayerController::RequestArenaAssignWeaponToLoadout(
+    TSubclassOf<AWeaponBase> WeaponClass, EWeaponLoadoutSlot LoadoutSlot) {
+  if (!IsLocalController() || !WeaponClass) {
+    return false;
+  }
+
+  if (HasAuthority()) {
+    return ApplyArenaWeaponLoadoutAssignment(WeaponClass, LoadoutSlot);
+  }
+
+  ServerAssignArenaWeaponToLoadout(WeaponClass, LoadoutSlot);
+  return true;
+}
+
+bool AMainPlayerController::RequestArenaSetActiveLoadoutSlot(
+    EWeaponLoadoutSlot LoadoutSlot) {
+  if (!IsLocalController()) {
+    return false;
+  }
+
+  if (HasAuthority()) {
+    return ApplyArenaActiveLoadoutSlot(LoadoutSlot);
+  }
+
+  ServerSetArenaActiveLoadoutSlot(LoadoutSlot);
+  return true;
+}
+
 void AMainPlayerController::BeginPlay() {
   Super::BeginPlay();
 
@@ -204,16 +232,10 @@ void AMainPlayerController::BindInputActions() {
           ActionName.Contains(TEXT("IA_Move"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleMove);
-        UE_LOG(LogProject, Display,
-               TEXT("Bound move input action. Controller=%s Action=%s"),
-               *GetNameSafe(this), *ActionName);
       } else if (ActionName.Contains(TEXT("Look")) ||
                  ActionName.Contains(TEXT("IA_Look"))) {
         EnhancedInputComponent->BindAction(Action, ETriggerEvent::Triggered, this,
                                            &AMainPlayerController::HandleLook);
-        UE_LOG(LogProject, Display,
-               TEXT("Bound look input action. Controller=%s Action=%s"),
-               *GetNameSafe(this), *ActionName);
       } else if (ActionName.Contains(TEXT("Jump")) ||
                  ActionName.Contains(TEXT("IA_Jump"))) {
         EnhancedInputComponent->BindAction(
@@ -492,27 +514,7 @@ void AMainPlayerController::ConfigurePawnForNetworkPresence(APawn *InPawn) const
              bLooksFirstPerson ? TEXT("true") : TEXT("false"));
     }
 
-    UE_LOG(LogProject, Display,
-           TEXT("Pawn mesh network presence. Pawn=%s Mesh=%s FirstPerson=%s OnlyOwnerSee=%s OwnerNoSee=%s Visible=%s HiddenInGame=%s AttachParent=%s"),
-           *GetNameSafe(InPawn), *GetNameSafe(MeshComponent),
-           bLooksFirstPerson ? TEXT("true") : TEXT("false"),
-           MeshComponent->bOnlyOwnerSee ? TEXT("true") : TEXT("false"),
-           MeshComponent->bOwnerNoSee ? TEXT("true") : TEXT("false"),
-           MeshComponent->IsVisible() ? TEXT("true") : TEXT("false"),
-           MeshComponent->bHiddenInGame ? TEXT("true") : TEXT("false"),
-           *GetNameSafe(MeshComponent->GetAttachParent()));
   }
-
-  UE_LOG(LogProject, Display,
-         TEXT("Configured pawn network presence. Controller=%s Pawn=%s Owner=%s Authority=%s Local=%s Role=%d RemoteRole=%d Meshes=%d MoveIgnored=%s LookIgnored=%s"),
-         *GetNameSafe(this), *GetNameSafe(InPawn),
-         *GetNameSafe(InPawn->GetOwner()),
-         HasAuthority() ? TEXT("true") : TEXT("false"),
-         IsLocalController() ? TEXT("true") : TEXT("false"),
-         static_cast<int32>(InPawn->GetLocalRole()),
-         static_cast<int32>(InPawn->GetRemoteRole()), MeshComponents.Num(),
-         IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
-         IsLookInputIgnored() ? TEXT("true") : TEXT("false"));
 }
 
 void AMainPlayerController::RefreshReplicatedPawnVisuals() const {
@@ -589,29 +591,6 @@ void AMainPlayerController::RestoreLocalGameplayInputState() {
   FInputModeGameOnly InputMode;
   SetInputMode(InputMode);
 
-  if (ACharacter *ControlledCharacter = Cast<ACharacter>(GetPawn())) {
-    if (const UCharacterMovementComponent *MovementComp =
-            ControlledCharacter->GetCharacterMovement()) {
-      UE_LOG(LogProject, Display,
-             TEXT("Restored local gameplay input. Controller=%s Pawn=%s MoveIgnored=%s LookIgnored=%s MovementMode=%d MaxWalkSpeed=%.1f MovementEnabled=%s"),
-             *GetNameSafe(this), *GetNameSafe(ControlledCharacter),
-             IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
-             IsLookInputIgnored() ? TEXT("true") : TEXT("false"),
-             static_cast<int32>(MovementComp->MovementMode),
-             MovementComp->MaxWalkSpeed,
-             (MovementComp->MovementMode != MOVE_None &&
-              MovementComp->UpdatedComponent)
-                 ? TEXT("true")
-                 : TEXT("false"));
-      return;
-    }
-  }
-
-  UE_LOG(LogProject, Display,
-         TEXT("Restored local gameplay input. Controller=%s Pawn=%s MoveIgnored=%s LookIgnored=%s"),
-         *GetNameSafe(this), *GetNameSafe(GetPawn()),
-         IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
-         IsLookInputIgnored() ? TEXT("true") : TEXT("false"));
 }
 
 void AMainPlayerController::UpdateArmoryOverlayInputState() {
@@ -648,13 +627,40 @@ void AMainPlayerController::ServerRequestArenaPurchaseWeapon_Implementation(
                                   RemainingSpendableCurrency);
 }
 
+void AMainPlayerController::ServerAssignArenaWeaponToLoadout_Implementation(
+    TSubclassOf<AWeaponBase> WeaponClass, EWeaponLoadoutSlot LoadoutSlot) {
+  ApplyArenaWeaponLoadoutAssignment(WeaponClass, LoadoutSlot);
+}
+
+void AMainPlayerController::ServerSetArenaActiveLoadoutSlot_Implementation(
+    EWeaponLoadoutSlot LoadoutSlot) {
+  ApplyArenaActiveLoadoutSlot(LoadoutSlot);
+}
+
 void AMainPlayerController::ClientArenaPurchaseWeaponResult_Implementation(
     TSubclassOf<AWeaponBase> WeaponClass, bool bSucceeded,
     int32 RemainingSpendableCurrency) {
+  bool bOwnedBeforeGrant = false;
+  bool bGrantSucceeded = false;
+  bool bOwnedAfterGrant = false;
+
   if (PlayerArmoryComponent) {
-    if (bSucceeded && WeaponClass &&
-        !PlayerArmoryComponent->HasOwnedWeapon(WeaponClass)) {
-      PlayerArmoryComponent->GrantPurchasedWeapon(WeaponClass);
+    PlayerArmoryComponent->BindToPawn(GetPawn());
+
+    bOwnedBeforeGrant =
+        WeaponClass && PlayerArmoryComponent->HasOwnedWeapon(WeaponClass);
+
+    if (bSucceeded && WeaponClass) {
+      ApplyInventoryWidgetLayoutDefaults();
+
+      if (!PlayerArmoryComponent->HasInitializedSessionState()) {
+        PlayerArmoryComponent->InitializeEmptySession(RemainingSpendableCurrency);
+      }
+
+      bGrantSucceeded =
+          PlayerArmoryComponent->HasOwnedWeapon(WeaponClass) ||
+          PlayerArmoryComponent->GrantPurchasedWeapon(WeaponClass);
+      bOwnedAfterGrant = PlayerArmoryComponent->HasOwnedWeapon(WeaponClass);
     }
   }
 
@@ -666,10 +672,13 @@ void AMainPlayerController::ClientArenaPurchaseWeaponResult_Implementation(
   }
 
   UE_LOG(LogProject, Display,
-         TEXT("ClientArenaPurchaseWeaponResult Player=%s Weapon=%s Success=%s Remaining=%d"),
+         TEXT("ClientArenaPurchaseWeaponResult Player=%s Weapon=%s Success=%s Remaining=%d OwnedBefore=%s Grant=%s OwnedAfter=%s"),
          *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
          bSucceeded ? TEXT("true") : TEXT("false"),
-         RemainingSpendableCurrency);
+         RemainingSpendableCurrency,
+         bOwnedBeforeGrant ? TEXT("true") : TEXT("false"),
+         bGrantSucceeded ? TEXT("true") : TEXT("false"),
+         bOwnedAfterGrant ? TEXT("true") : TEXT("false"));
 }
 
 bool AMainPlayerController::HandleArenaPurchaseWeapon(
@@ -763,6 +772,62 @@ bool AMainPlayerController::ResolveServerShopPrice(
   }
 
   return false;
+}
+
+bool AMainPlayerController::ApplyArenaWeaponLoadoutAssignment(
+    TSubclassOf<AWeaponBase> WeaponClass, EWeaponLoadoutSlot LoadoutSlot) {
+  if (!HasAuthority() || !PlayerArmoryComponent || !WeaponClass) {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena loadout assignment rejected. Player=%s Weapon=%s Slot=%d Authority=%s HasArmory=%s"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
+           static_cast<int32>(LoadoutSlot),
+           HasAuthority() ? TEXT("true") : TEXT("false"),
+           PlayerArmoryComponent ? TEXT("true") : TEXT("false"));
+    return false;
+  }
+
+  PlayerArmoryComponent->BindToPawn(GetPawn());
+  const bool bSucceeded =
+      PlayerArmoryComponent->AssignWeaponToSlot(WeaponClass, LoadoutSlot);
+  if (bSucceeded) {
+    UE_LOG(LogProject, Display,
+           TEXT("Arena loadout assignment accepted. Player=%s Weapon=%s Slot=%d"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
+           static_cast<int32>(LoadoutSlot));
+  } else {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena loadout assignment rejected by armory. Player=%s Weapon=%s Slot=%d"),
+           *GetNameSafe(this), *GetNameSafe(WeaponClass.Get()),
+           static_cast<int32>(LoadoutSlot));
+  }
+
+  return bSucceeded;
+}
+
+bool AMainPlayerController::ApplyArenaActiveLoadoutSlot(
+    EWeaponLoadoutSlot LoadoutSlot) {
+  if (!HasAuthority() || !PlayerArmoryComponent) {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena active loadout slot rejected. Player=%s Slot=%d Authority=%s HasArmory=%s"),
+           *GetNameSafe(this), static_cast<int32>(LoadoutSlot),
+           HasAuthority() ? TEXT("true") : TEXT("false"),
+           PlayerArmoryComponent ? TEXT("true") : TEXT("false"));
+    return false;
+  }
+
+  PlayerArmoryComponent->BindToPawn(GetPawn());
+  const bool bSucceeded = PlayerArmoryComponent->SetActiveSlot(LoadoutSlot);
+  if (bSucceeded) {
+    UE_LOG(LogProject, Display,
+           TEXT("Arena active loadout slot accepted. Player=%s Slot=%d"),
+           *GetNameSafe(this), static_cast<int32>(LoadoutSlot));
+  } else {
+    UE_LOG(LogProject, Warning,
+           TEXT("Arena active loadout slot rejected by armory. Player=%s Slot=%d"),
+           *GetNameSafe(this), static_cast<int32>(LoadoutSlot));
+  }
+
+  return bSucceeded;
 }
 
 void AMainPlayerController::OpenWeaponShop(AWeaponShopTerminal *ShopTerminal) {
@@ -874,31 +939,6 @@ void AMainPlayerController::HandleMove(const FInputActionValue &Value) {
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
   const FVector RightDirection =
       FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-  if (const UWorld *World = GetWorld()) {
-    const float TimeSeconds = World->GetTimeSeconds();
-    if (TimeSeconds - LastMoveDebugLogTimeSeconds >= 1.0f) {
-      LastMoveDebugLogTimeSeconds = TimeSeconds;
-
-      const UCharacterMovementComponent *MovementComp = nullptr;
-      if (const ACharacter *ControlledCharacter = Cast<ACharacter>(ControlledPawn)) {
-        MovementComp = ControlledCharacter->GetCharacterMovement();
-      }
-
-      UE_LOG(LogProject, Display,
-             TEXT("HandleMove input. Controller=%s Pawn=%s NetMode=%d Local=%s Role=%d RemoteRole=%d Value=(%.2f, %.2f) MoveIgnored=%s MovementMode=%d MaxWalkSpeed=%.1f Location=%s"),
-             *GetNameSafe(this), *GetNameSafe(ControlledPawn),
-             GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
-             IsLocalController() ? TEXT("true") : TEXT("false"),
-             static_cast<int32>(ControlledPawn->GetLocalRole()),
-             static_cast<int32>(ControlledPawn->GetRemoteRole()),
-             MovementVector.X, MovementVector.Y,
-             IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
-             MovementComp ? static_cast<int32>(MovementComp->MovementMode) : -1,
-             MovementComp ? MovementComp->MaxWalkSpeed : 0.0f,
-             *ControlledPawn->GetActorLocation().ToCompactString());
-    }
-  }
 
   ControlledPawn->AddMovementInput(ForwardDirection, MovementVector.Y);
   ControlledPawn->AddMovementInput(RightDirection, MovementVector.X);

@@ -5,6 +5,7 @@
 #include "Character/ProjectCharacter.h"
 #include "Combat/CombatComponent.h"
 #include "Combat/WeaponBase.h"
+#include "Controllers/MainPlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Project.h"
 
@@ -88,6 +89,10 @@ void UPlayerArmoryComponent::ApplyStateToBoundPawn() {
   }
   if (!BoundCombatComponent.IsValid()) {
     BroadcastArmoryChanged();
+    UE_LOG(LogProject, Warning,
+           TEXT("PlayerArmoryComponent: cannot apply state, no combat component. Owner=%s Pawn=%s Items=%d"),
+           *GetNameSafe(GetOwner()), *GetNameSafe(BoundPawn.Get()),
+           OwnedItems.Num());
     return;
   }
 
@@ -365,6 +370,13 @@ bool UPlayerArmoryComponent::SetActiveSlot(EWeaponLoadoutSlot Slot) {
   ActiveSlot = Slot;
   if (BoundCombatComponent.IsValid()) {
     BoundCombatComponent->SetActiveLoadoutSlot(Slot);
+  }
+
+  if (AMainPlayerController *MainPlayerController =
+          Cast<AMainPlayerController>(GetOwner())) {
+    if (!MainPlayerController->HasAuthority()) {
+      MainPlayerController->RequestArenaSetActiveLoadoutSlot(Slot);
+    }
   }
 
   BroadcastArmoryChanged();
@@ -997,8 +1009,21 @@ bool UPlayerArmoryComponent::MoveItemToLoadoutInternal(
   if (BoundPawn.IsValid()) {
     ApplyStateToBoundPawn();
   } else {
+    UE_LOG(LogProject, Warning,
+           TEXT("PlayerArmoryComponent: moved item to loadout without bound pawn. Owner=%s Weapon=%s Slot=%d ActiveSlot=%d"),
+           *GetNameSafe(GetOwner()), *GetNameSafe(Item.WeaponClass.Get()),
+           static_cast<int32>(Slot), static_cast<int32>(ActiveSlot));
     BroadcastArmoryChanged();
   }
+
+  if (AMainPlayerController *MainPlayerController =
+          Cast<AMainPlayerController>(GetOwner())) {
+    if (!MainPlayerController->HasAuthority()) {
+      MainPlayerController->RequestArenaAssignWeaponToLoadout(Item.WeaponClass,
+                                                             Slot);
+    }
+  }
+
   return true;
 }
 

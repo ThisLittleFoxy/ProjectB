@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Combat/WeaponBase.h"
 #include "Combat/WeaponLoadoutTypes.h"
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
@@ -9,7 +10,6 @@
 #include "CombatComponent.generated.h"
 
 class ACharacter;
-class AWeaponBase;
 class UCameraComponent;
 class UInteractionComponent;
 class USkeletalMeshComponent;
@@ -215,6 +215,21 @@ private:
   UFUNCTION()
   void OnRep_ReplicatedWeaponPresence();
 
+  UFUNCTION(Server, Reliable)
+  void ServerStartFire();
+
+  UFUNCTION(Server, Reliable)
+  void ServerStopFire();
+
+  UFUNCTION(Server, Reliable)
+  void ServerReload();
+
+  UFUNCTION(NetMulticast, Unreliable)
+  void MulticastPlayWeaponFireEvent(FWeaponFireCosmeticEvent FireEvent);
+
+  UFUNCTION(NetMulticast, Reliable)
+  void MulticastPlayWeaponReloadEvent();
+
   void AttachWeaponToOwner(AWeaponBase *Weapon);
   void SetWeaponActiveState(AWeaponBase *Weapon, bool bShouldBeActive);
   void BroadcastCurrentWeaponChanged(AWeaponBase *PreviousWeapon,
@@ -222,6 +237,10 @@ private:
   void DestroyAllLoadoutWeapons();
   void UpdateReplicatedWeaponPresenceFromLocalState();
   void ApplyReplicatedWeaponPresence();
+  void BindWeaponCosmeticEvents(AWeaponBase *Weapon);
+  void HandleWeaponFireCosmeticEvent(
+      AWeaponBase *Weapon, const FWeaponFireCosmeticEvent &FireEvent);
+  bool ShouldSkipMulticastCosmetics() const;
   void CacheOwnerReferences();
   void EnsureLoadoutArraySize();
   int32 CountOccupiedSlots() const;

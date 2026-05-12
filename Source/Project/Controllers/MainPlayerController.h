@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/WeaponLoadoutTypes.h"
 #include "GameFramework/PlayerController.h"
 #include "MainPlayerController.generated.h"
 
@@ -35,6 +36,13 @@ public:
   bool RequestArenaPurchaseWeapon(AWeaponShopTerminal *ShopTerminal,
                                   TSubclassOf<AWeaponBase> WeaponClass,
                                   int32 ClientDisplayedPrice);
+
+  UFUNCTION(BlueprintCallable, Category = "Arena|Loadout")
+  bool RequestArenaAssignWeaponToLoadout(TSubclassOf<AWeaponBase> WeaponClass,
+                                         EWeaponLoadoutSlot LoadoutSlot);
+
+  UFUNCTION(BlueprintCallable, Category = "Arena|Loadout")
+  bool RequestArenaSetActiveLoadoutSlot(EWeaponLoadoutSlot LoadoutSlot);
 
   UFUNCTION(BlueprintCallable, Category = "UI|Armory")
   void OpenWeaponShop(AWeaponShopTerminal *ShopTerminal);
@@ -172,6 +180,13 @@ protected:
                                         TSubclassOf<AWeaponBase> WeaponClass,
                                         int32 ClientDisplayedPrice);
 
+  UFUNCTION(Server, Reliable)
+  void ServerAssignArenaWeaponToLoadout(TSubclassOf<AWeaponBase> WeaponClass,
+                                        EWeaponLoadoutSlot LoadoutSlot);
+
+  UFUNCTION(Server, Reliable)
+  void ServerSetArenaActiveLoadoutSlot(EWeaponLoadoutSlot LoadoutSlot);
+
   UFUNCTION(Client, Reliable)
   void ClientArenaPurchaseWeaponResult(TSubclassOf<AWeaponBase> WeaponClass,
                                        bool bSucceeded,
@@ -185,6 +200,10 @@ protected:
   bool ResolveServerShopPrice(AWeaponShopTerminal *ShopTerminal,
                               TSubclassOf<AWeaponBase> WeaponClass,
                               int32 &OutPrice) const;
+
+  bool ApplyArenaWeaponLoadoutAssignment(TSubclassOf<AWeaponBase> WeaponClass,
+                                         EWeaponLoadoutSlot LoadoutSlot);
+  bool ApplyArenaActiveLoadoutSlot(EWeaponLoadoutSlot LoadoutSlot);
 
   UFUNCTION()
   void HandleMove(const FInputActionValue &Value);
@@ -244,9 +263,6 @@ protected:
 
   UPROPERTY(Transient)
   float LastWeaponCycleInputTimeSeconds = -1000.0f;
-
-  UPROPERTY(Transient)
-  float LastMoveDebugLogTimeSeconds = -1000.0f;
 
 public:
   UFUNCTION(BlueprintCallable, Category = "Gameplay|Startup")

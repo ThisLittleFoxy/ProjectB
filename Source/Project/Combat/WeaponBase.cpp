@@ -2,6 +2,7 @@
 
 #include "Combat/WeaponBase.h"
 #include "Combat/HitZoneComponent.h"
+#include "Character/HealthComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
@@ -9,6 +10,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -222,6 +224,38 @@ void AWeaponBase::SetAiming(bool bNewAiming) {
   bIsAiming = bNewAiming;
 }
 
+void AWeaponBase::PlayFireCosmetics(
+    const FWeaponFireCosmeticEvent &FireEvent) {
+  if (FireEvent.bDryFire) {
+    if (DryFireSound) {
+      UGameplayStatics::PlaySoundAtLocation(this, DryFireSound,
+                                            FireEvent.Location);
+    }
+    return;
+  }
+
+  if (FireSound) {
+    UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetMuzzleLocation());
+  }
+
+  if (MuzzleEffect) {
+    UGameplayStatics::SpawnEmitterAtLocation(
+        GetWorld(), MuzzleEffect, GetMuzzleLocation(), GetActorRotation(), true);
+  }
+
+  if (FireEvent.bHit && ImpactEffect) {
+    UGameplayStatics::SpawnEmitterAtLocation(
+        GetWorld(), ImpactEffect, FireEvent.Location, FireEvent.Normal.Rotation(),
+        true);
+  }
+}
+
+void AWeaponBase::PlayReloadCosmetics() {
+  if (ReloadSound) {
+    UGameplayStatics::PlaySoundAtLocation(this, ReloadSound, GetActorLocation());
+  }
+}
+
 float AWeaponBase::GetDamageMultiplierForZone(EHitZone Zone) const {
   if (const float *FoundMultiplier = DamageMultiplierByZone.Find(Zone)) {
     return FMath::Max(0.0f, *FoundMultiplier);
@@ -261,10 +295,12 @@ void AWeaponBase::StopFire() {
 
 bool AWeaponBase::FireOnce() {
   if (!CanFire()) {
-    if (DryFireSound) {
-      UGameplayStatics::PlaySoundAtLocation(this, DryFireSound,
-                                            GetActorLocation());
-    }
+    FWeaponFireCosmeticEvent FireEvent;
+    FireEvent.bDryFire = true;
+    FireEvent.Location = GetActorLocation();
+    FireEvent.Normal = GetActorForwardVector();
+    PlayFireCosmetics(FireEvent);
+    OnWeaponFireCosmeticEvent.Broadcast(this, FireEvent);
     return false;
   }
 
@@ -277,14 +313,12 @@ bool AWeaponBase::FireOnce() {
   ApplyCameraRecoil(RecoilOffsetDeg);
   BP_OnRecoilApplied(RecoilOffsetDeg.X, RecoilOffsetDeg.Y);
 
-  if (FireSound) {
-    UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetMuzzleLocation());
-  }
-
-  if (MuzzleEffect) {
-    UGameplayStatics::SpawnEmitterAtLocation(
-        GetWorld(), MuzzleEffect, GetMuzzleLocation(), GetActorRotation(), true);
-  }
+  FWeaponFireCosmeticEvent FireEvent;
+  FireEvent.bHit = bHit;
+  FireEvent.Location = bHit ? HitResult.ImpactPoint : TraceEnd;
+  FireEvent.Normal = bHit ? HitResult.ImpactNormal : -GetActorForwardVector();
+  PlayFireCosmetics(FireEvent);
+  OnWeaponFireCosmeticEvent.Broadcast(this, FireEvent);
 
   if (bHit) {
     if (AActor *HitActor = HitResult.GetActor()) {
@@ -299,11 +333,17 @@ bool AWeaponBase::FireOnce() {
       const float ZoneDamageMultiplier = GetDamageMultiplierForZone(HitZone);
       const float FinalDamage = Damage * ZoneDamageMultiplier;
 
-      UGameplayStatics::ApplyPointDamage(HitActor, FinalDamage, ShotDirection,
-                                         HitResult, GetOwningController(), this,
-                                         UDamageType::StaticClass());
+      bool bAppliedDamage = false;
+      if (ShouldApplyAuthoritativeDamage() &&
+          ShouldApplyDamageToActor(HitActor)) {
+        UGameplayStatics::ApplyPointDamage(
+            HitActor, FinalDamage, ShotDirection, HitResult,
+            GetOwningController(), this, UDamageType::StaticClass());
+        bAppliedDamage = true;
+      }
 
-      if (bHasHitZoneComponent && GEngine && FinalDamage > 0.0f) {
+      if (bAppliedDamage && bHasHitZoneComponent && GEngine &&
+          FinalDamage > 0.0f) {
         const FString HitBoneName = HitResult.BoneName.IsNone()
                                         ? TEXT("none")
                                         : HitResult.BoneName.ToString();
@@ -317,11 +357,6 @@ bool AWeaponBase::FireOnce() {
       }
     }
 
-    if (ImpactEffect) {
-      UGameplayStatics::SpawnEmitterAtLocation(
-          GetWorld(), ImpactEffect, HitResult.ImpactPoint,
-          HitResult.ImpactNormal.Rotation(), true);
-    }
   }
 
   ConsumeAmmo();
@@ -339,6 +374,7 @@ bool AWeaponBase::Reload() {
   CurrentAmmoInMagazine += AmmoToLoad;
   ReserveAmmo -= AmmoToLoad;
   BurstShotIndex = 0;
+  PlayReloadCosmetics();
   return AmmoToLoad > 0;
 }
 
@@ -485,6 +521,46 @@ AController *AWeaponBase::GetOwningController() const {
   }
 
   return nullptr;
+}
+
+bool AWeaponBase::ShouldApplyAuthoritativeDamage() const {
+  if (GetNetMode() == NM_Standalone) {
+    return true;
+  }
+
+  if (OwningPawn.IsValid()) {
+    return OwningPawn->HasAuthority();
+  }
+
+  if (const APawn *OwnerPawn = Cast<APawn>(GetOwner())) {
+    return OwnerPawn->HasAuthority();
+  }
+
+  return HasAuthority();
+}
+
+bool AWeaponBase::ShouldApplyDamageToActor(const AActor *HitActor) const {
+  if (!HitActor) {
+    return false;
+  }
+
+  const APawn *HitPawn = Cast<APawn>(HitActor);
+  if (!HitPawn) {
+    return true;
+  }
+
+  if (!HitPawn->GetPlayerState()) {
+    return true;
+  }
+
+  if (bBypassFriendlyFireRules) {
+    return true;
+  }
+
+  const UHealthComponent *TargetHealthComponent =
+      HitPawn->FindComponentByClass<UHealthComponent>();
+  return TargetHealthComponent &&
+         TargetHealthComponent->AcceptsFriendlyFireDamage();
 }
 
 FVector AWeaponBase::GetMuzzleLocation() const {

@@ -96,7 +96,11 @@ void UCombatComponent::BeginPlay() {
   CacheOwnerReferences();
   EnsureLoadoutArraySize();
 
-  if (bSpawnStarterWeaponOnBeginPlay && !CurrentWeapon) {
+  const AActor *OwnerActor = GetOwner();
+  const bool bCanInitializeLocalLoadout =
+      OwnerActor && (OwnerActor->HasAuthority() || GetNetMode() == NM_Standalone);
+  if (bCanInitializeLocalLoadout && bSpawnStarterWeaponOnBeginPlay &&
+      !CurrentWeapon) {
     if (!InitializeLoadout()) {
       UE_LOG(LogProject, Warning,
              TEXT("CombatComponent: failed to initialize loadout on '%s'"),
@@ -399,6 +403,7 @@ bool UCombatComponent::EquipSpawnedWeapon(AWeaponBase *NewWeapon) {
   }
 
   NewWeapon->SetOwningPawn(OwningCharacter);
+  BindWeaponCosmeticEvents(NewWeapon);
   AttachWeaponToOwner(NewWeapon);
   SetWeaponActiveState(NewWeapon, false);
   SpawnedLoadoutWeapons[TargetSlotIndex] = NewWeapon;
@@ -462,6 +467,9 @@ void UCombatComponent::StartFire() {
 
   if (CurrentWeapon) {
     CurrentWeapon->StartFire();
+    if (const AActor *OwnerActor = GetOwner(); OwnerActor && !OwnerActor->HasAuthority()) {
+      ServerStartFire();
+    }
   }
 }
 
@@ -472,11 +480,28 @@ void UCombatComponent::StopFire() {
 
   if (CurrentWeapon) {
     CurrentWeapon->StopFire();
+    if (const AActor *OwnerActor = GetOwner(); OwnerActor && !OwnerActor->HasAuthority()) {
+      ServerStopFire();
+    }
   }
 }
 
 bool UCombatComponent::Reload() {
-  return CurrentWeapon ? CurrentWeapon->Reload() : false;
+  if (!CurrentWeapon) {
+    return false;
+  }
+
+  const bool bReloaded = CurrentWeapon->Reload();
+  const AActor *OwnerActor = GetOwner();
+  if (OwnerActor && OwnerActor->HasAuthority()) {
+    if (bReloaded) {
+      MulticastPlayWeaponReloadEvent();
+    }
+  } else {
+    ServerReload();
+  }
+
+  return bReloaded;
 }
 
 int32 UCombatComponent::GetAmmoInMagazine() const {
@@ -618,6 +643,46 @@ void UCombatComponent::BroadcastCurrentWeaponChanged(AWeaponBase *PreviousWeapon
       IsValid(NewWeapon) ? NewWeapon->GetWeaponTypeTag() : FGameplayTag();
   OnCurrentWeaponChanged.Broadcast(PreviousWeapon, NewWeapon, NewSlotIndex,
                                    NewWeaponTypeTag);
+}
+
+void UCombatComponent::ServerStartFire_Implementation() {
+  if (!CurrentWeapon) {
+    UE_LOG(LogProject, Verbose,
+           TEXT("CombatComponent: server start fire rejected, no current weapon. Owner=%s"),
+           *GetNameSafe(GetOwner()));
+    return;
+  }
+
+  CurrentWeapon->StartFire();
+}
+
+void UCombatComponent::ServerStopFire_Implementation() {
+  if (CurrentWeapon) {
+    CurrentWeapon->StopFire();
+  }
+}
+
+void UCombatComponent::ServerReload_Implementation() { Reload(); }
+
+void UCombatComponent::MulticastPlayWeaponFireEvent_Implementation(
+    FWeaponFireCosmeticEvent FireEvent) {
+  if (ShouldSkipMulticastCosmetics()) {
+    return;
+  }
+
+  if (CurrentWeapon) {
+    CurrentWeapon->PlayFireCosmetics(FireEvent);
+  }
+}
+
+void UCombatComponent::MulticastPlayWeaponReloadEvent_Implementation() {
+  if (ShouldSkipMulticastCosmetics()) {
+    return;
+  }
+
+  if (CurrentWeapon) {
+    CurrentWeapon->PlayReloadCosmetics();
+  }
 }
 
 void UCombatComponent::DestroyAllLoadoutWeapons() {
@@ -823,10 +888,40 @@ AWeaponBase *UCombatComponent::SpawnWeaponForSlot(
   }
 
   SpawnedWeapon->SetOwningPawn(OwningCharacter);
+  BindWeaponCosmeticEvents(SpawnedWeapon);
   AttachWeaponToOwner(SpawnedWeapon);
   SetWeaponActiveState(SpawnedWeapon, false);
   SpawnedLoadoutWeapons[SlotIndex] = SpawnedWeapon;
   return SpawnedWeapon;
+}
+
+void UCombatComponent::BindWeaponCosmeticEvents(AWeaponBase *Weapon) {
+  if (!Weapon) {
+    return;
+  }
+
+  Weapon->OnWeaponFireCosmeticEvent.RemoveAll(this);
+  Weapon->OnWeaponFireCosmeticEvent.AddUObject(
+      this, &UCombatComponent::HandleWeaponFireCosmeticEvent);
+}
+
+void UCombatComponent::HandleWeaponFireCosmeticEvent(
+    AWeaponBase *Weapon, const FWeaponFireCosmeticEvent &FireEvent) {
+  const AActor *OwnerActor = GetOwner();
+  if (!OwnerActor || !OwnerActor->HasAuthority() || Weapon != CurrentWeapon) {
+    return;
+  }
+
+  MulticastPlayWeaponFireEvent(FireEvent);
+}
+
+bool UCombatComponent::ShouldSkipMulticastCosmetics() const {
+  const AActor *OwnerActor = GetOwner();
+  if (OwnerActor && OwnerActor->HasAuthority()) {
+    return true;
+  }
+
+  return OwningCharacter && OwningCharacter->IsLocallyControlled();
 }
 
 void UCombatComponent::UpdateCurrentWeaponAimState() {
