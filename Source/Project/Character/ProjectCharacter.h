@@ -136,6 +136,9 @@ private:
   UFUNCTION(Server, Reliable)
   void ServerSetWantsToSprint(bool bNewWantsToSprint);
 
+  UFUNCTION(Server, Reliable)
+  void ServerEquipWeaponSlot(int32 SlotIndex);
+
   UFUNCTION()
   void OnRep_WantsToSprint();
 

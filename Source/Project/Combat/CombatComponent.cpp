@@ -9,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "GameplayTagsManager.h"
 #include "Interaction/InteractionComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "Project.h"
 #include "UObject/UnrealType.h"
 
@@ -70,9 +71,18 @@ bool IsValidLoadoutSlotIndex(int32 SlotIndex) {
 
 UCombatComponent::UCombatComponent() {
   PrimaryComponentTick.bCanEverTick = false;
+  SetIsReplicatedByDefault(true);
   ScopeOverlayWeaponTypeTag =
       FGameplayTag::RequestGameplayTag(TEXT("Weapon.Type.Sniper"), false);
   EnsureLoadoutArraySize();
+}
+
+void UCombatComponent::GetLifetimeReplicatedProps(
+    TArray<FLifetimeProperty> &OutLifetimeProps) const {
+  Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+  DOREPLIFETIME(UCombatComponent, ReplicatedLoadoutWeaponClasses);
+  DOREPLIFETIME(UCombatComponent, ReplicatedCurrentWeaponSlotIndex);
 }
 
 void UCombatComponent::BeginPlay() {
@@ -135,6 +145,7 @@ bool UCombatComponent::InitializeLoadout() {
   if (!bSpawnedAnyWeapon) {
     CurrentWeapon = nullptr;
     CurrentWeaponSlotIndex = INDEX_NONE;
+    UpdateReplicatedWeaponPresenceFromLocalState();
     return false;
   }
 
@@ -159,6 +170,7 @@ void UCombatComponent::ClearLoadout() {
   AWeaponBase *PreviousWeapon = CurrentWeapon;
   DestroyAllLoadoutWeapons();
   BroadcastCurrentWeaponChanged(PreviousWeapon, nullptr, INDEX_NONE);
+  UpdateReplicatedWeaponPresenceFromLocalState();
 }
 
 bool UCombatComponent::EquipWeaponSlot(int32 SlotIndex) {
@@ -181,6 +193,7 @@ bool UCombatComponent::EquipWeaponSlot(int32 SlotIndex) {
 
   if (CurrentWeapon == NewWeapon && CurrentWeaponSlotIndex == SlotIndex) {
     SetWeaponActiveState(CurrentWeapon, true);
+    UpdateReplicatedWeaponPresenceFromLocalState();
     return true;
   }
 
@@ -202,6 +215,7 @@ bool UCombatComponent::EquipWeaponSlot(int32 SlotIndex) {
 
   BroadcastCurrentWeaponChanged(PreviousWeapon, CurrentWeapon,
                                 CurrentWeaponSlotIndex);
+  UpdateReplicatedWeaponPresenceFromLocalState();
   return true;
 }
 
@@ -266,6 +280,7 @@ bool UCombatComponent::SetWeaponForSlot(EWeaponLoadoutSlot Slot,
 
   AWeaponBase *SpawnedWeapon = SpawnWeaponForSlot(SlotIndex, WeaponClass);
   if (!IsValid(SpawnedWeapon)) {
+    UpdateReplicatedWeaponPresenceFromLocalState();
     return false;
   }
 
@@ -273,6 +288,7 @@ bool UCombatComponent::SetWeaponForSlot(EWeaponLoadoutSlot Slot,
     return EquipWeaponSlot(SlotIndex);
   }
 
+  UpdateReplicatedWeaponPresenceFromLocalState();
   return true;
 }
 
@@ -310,7 +326,10 @@ void UCombatComponent::ClearWeaponSlot(EWeaponLoadoutSlot Slot) {
       EquipWeaponSlot(FallbackSlotIndex);
     } else {
       BroadcastCurrentWeaponChanged(PreviousWeapon, nullptr, INDEX_NONE);
+      UpdateReplicatedWeaponPresenceFromLocalState();
     }
+  } else {
+    UpdateReplicatedWeaponPresenceFromLocalState();
   }
 }
 
@@ -388,6 +407,7 @@ bool UCombatComponent::EquipSpawnedWeapon(AWeaponBase *NewWeapon) {
     return EquipWeaponSlot(TargetSlotIndex);
   }
 
+  UpdateReplicatedWeaponPresenceFromLocalState();
   return true;
 }
 
@@ -423,6 +443,7 @@ void UCombatComponent::UnequipCurrentWeapon(bool bDestroyWeapon) {
     EquipWeaponSlot(FallbackSlotIndex);
   } else {
     BroadcastCurrentWeaponChanged(PreviousWeapon, nullptr, INDEX_NONE);
+    UpdateReplicatedWeaponPresenceFromLocalState();
   }
 }
 
@@ -616,6 +637,104 @@ void UCombatComponent::DestroyAllLoadoutWeapons() {
   CurrentWeaponSlotIndex = INDEX_NONE;
 }
 
+void UCombatComponent::UpdateReplicatedWeaponPresenceFromLocalState() {
+  const AActor *OwnerActor = GetOwner();
+  if (!OwnerActor || !OwnerActor->HasAuthority()) {
+    return;
+  }
+
+  EnsureLoadoutArraySize();
+  ReplicatedLoadoutWeaponClasses.SetNumZeroed(ProjectWeaponLoadout::SlotCount);
+
+  for (int32 SlotIndex = 0; SlotIndex < SpawnedLoadoutWeapons.Num(); ++SlotIndex) {
+    const AWeaponBase *Weapon = SpawnedLoadoutWeapons[SlotIndex];
+    ReplicatedLoadoutWeaponClasses[SlotIndex] =
+        IsValid(Weapon) ? Weapon->GetClass() : nullptr;
+  }
+
+  ReplicatedCurrentWeaponSlotIndex = CurrentWeaponSlotIndex;
+
+  if (AActor *MutableOwnerActor = GetOwner()) {
+    MutableOwnerActor->ForceNetUpdate();
+  }
+}
+
+void UCombatComponent::OnRep_ReplicatedWeaponPresence() {
+  ApplyReplicatedWeaponPresence();
+}
+
+void UCombatComponent::ApplyReplicatedWeaponPresence() {
+  const AActor *OwnerActor = GetOwner();
+  if (OwnerActor && OwnerActor->HasAuthority()) {
+    return;
+  }
+
+  if (!OwningCharacter) {
+    CacheOwnerReferences();
+  }
+  if (!OwningCharacter) {
+    return;
+  }
+
+  EnsureLoadoutArraySize();
+
+  TArray<TSubclassOf<AWeaponBase>> DesiredWeaponClasses =
+      ReplicatedLoadoutWeaponClasses;
+  DesiredWeaponClasses.SetNumZeroed(ProjectWeaponLoadout::SlotCount);
+
+  AWeaponBase *PreviousWeapon = CurrentWeapon;
+  for (int32 SlotIndex = 0; SlotIndex < ProjectWeaponLoadout::SlotCount; ++SlotIndex) {
+    TSubclassOf<AWeaponBase> DesiredWeaponClass = DesiredWeaponClasses[SlotIndex];
+    AWeaponBase *ExistingWeapon = SpawnedLoadoutWeapons[SlotIndex];
+    const bool bClassMatches =
+        IsValid(ExistingWeapon) && ExistingWeapon->GetClass() == DesiredWeaponClass;
+
+    if (!DesiredWeaponClass) {
+      if (IsValid(ExistingWeapon)) {
+        if (ExistingWeapon == CurrentWeapon) {
+          CurrentWeapon = nullptr;
+          CurrentWeaponSlotIndex = INDEX_NONE;
+        }
+        ExistingWeapon->Destroy();
+        SpawnedLoadoutWeapons[SlotIndex] = nullptr;
+      }
+      continue;
+    }
+
+    if (bClassMatches) {
+      AttachWeaponToOwner(ExistingWeapon);
+      continue;
+    }
+
+    if (IsValid(ExistingWeapon)) {
+      if (ExistingWeapon == CurrentWeapon) {
+        CurrentWeapon = nullptr;
+        CurrentWeaponSlotIndex = INDEX_NONE;
+      }
+      ExistingWeapon->Destroy();
+      SpawnedLoadoutWeapons[SlotIndex] = nullptr;
+    }
+
+    SpawnWeaponForSlot(SlotIndex, DesiredWeaponClass);
+  }
+
+  if (IsValidLoadoutSlotIndex(ReplicatedCurrentWeaponSlotIndex) &&
+      IsValid(SpawnedLoadoutWeapons[ReplicatedCurrentWeaponSlotIndex])) {
+    EquipWeaponSlot(ReplicatedCurrentWeaponSlotIndex);
+    return;
+  }
+
+  for (AWeaponBase *Weapon : SpawnedLoadoutWeapons) {
+    SetWeaponActiveState(Weapon, false);
+  }
+  CurrentWeapon = nullptr;
+  CurrentWeaponSlotIndex = INDEX_NONE;
+
+  if (PreviousWeapon) {
+    BroadcastCurrentWeaponChanged(PreviousWeapon, nullptr, INDEX_NONE);
+  }
+}
+
 void UCombatComponent::CacheOwnerReferences() {
   OwningCharacter = Cast<ACharacter>(GetOwner());
   CachedCameraComponent = ResolveCameraComponent();
@@ -736,7 +855,7 @@ USkeletalMeshComponent *UCombatComponent::ResolveAttachMesh() const {
   TArray<USkeletalMeshComponent *> MeshComponents;
   OwningCharacter->GetComponents<USkeletalMeshComponent>(MeshComponents);
 
-  if (bPreferFirstPersonMesh) {
+  if (bPreferFirstPersonMesh && OwningCharacter->IsLocallyControlled()) {
     if (const UCameraComponent *CameraComp =
             OwningCharacter->FindComponentByClass<UCameraComponent>()) {
       USceneComponent *CurrentParent = CameraComp->GetAttachParent();

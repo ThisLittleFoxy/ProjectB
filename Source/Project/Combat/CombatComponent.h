@@ -27,6 +27,8 @@ public:
   UCombatComponent();
 
   virtual void BeginPlay() override;
+  virtual void GetLifetimeReplicatedProps(
+      TArray<FLifetimeProperty> &OutLifetimeProps) const override;
 
   UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
   bool InitializeLoadout();
@@ -198,17 +200,28 @@ private:
   UPROPERTY(Transient)
   TArray<TObjectPtr<AWeaponBase>> SpawnedLoadoutWeapons;
 
+  UPROPERTY(ReplicatedUsing = OnRep_ReplicatedWeaponPresence, Transient)
+  TArray<TSubclassOf<AWeaponBase>> ReplicatedLoadoutWeaponClasses;
+
+  UPROPERTY(ReplicatedUsing = OnRep_ReplicatedWeaponPresence, Transient)
+  int32 ReplicatedCurrentWeaponSlotIndex = INDEX_NONE;
+
   UPROPERTY(Transient)
   float DefaultFieldOfView = 0.0f;
 
   UPROPERTY(Transient)
   bool bIsScoping = false;
 
+  UFUNCTION()
+  void OnRep_ReplicatedWeaponPresence();
+
   void AttachWeaponToOwner(AWeaponBase *Weapon);
   void SetWeaponActiveState(AWeaponBase *Weapon, bool bShouldBeActive);
   void BroadcastCurrentWeaponChanged(AWeaponBase *PreviousWeapon,
                                      AWeaponBase *NewWeapon, int32 NewSlotIndex);
   void DestroyAllLoadoutWeapons();
+  void UpdateReplicatedWeaponPresenceFromLocalState();
+  void ApplyReplicatedWeaponPresence();
   void CacheOwnerReferences();
   void EnsureLoadoutArraySize();
   int32 CountOccupiedSlots() const;

@@ -125,16 +125,38 @@ void AProjectCharacter::StopScope() {
 }
 
 bool AProjectCharacter::EquipNextWeapon() {
-  return CombatComponent ? CombatComponent->EquipNextWeapon() : false;
+  if (!CombatComponent || !CombatComponent->EquipNextWeapon()) {
+    return false;
+  }
+
+  if (!HasAuthority()) {
+    ServerEquipWeaponSlot(CombatComponent->GetCurrentWeaponSlotIndex());
+  }
+
+  return true;
 }
 
 bool AProjectCharacter::EquipPreviousWeapon() {
-  return CombatComponent ? CombatComponent->EquipPreviousWeapon() : false;
+  if (!CombatComponent || !CombatComponent->EquipPreviousWeapon()) {
+    return false;
+  }
+
+  if (!HasAuthority()) {
+    ServerEquipWeaponSlot(CombatComponent->GetCurrentWeaponSlotIndex());
+  }
+
+  return true;
 }
 
 void AProjectCharacter::ServerSetWantsToSprint_Implementation(
     bool bNewWantsToSprint) {
   SetWantsToSprint(bNewWantsToSprint);
+}
+
+void AProjectCharacter::ServerEquipWeaponSlot_Implementation(int32 SlotIndex) {
+  if (CombatComponent) {
+    CombatComponent->EquipWeaponSlot(SlotIndex);
+  }
 }
 
 void AProjectCharacter::OnRep_WantsToSprint() {

@@ -168,6 +168,9 @@
 - `GA-06 Player Death / Lobby Return` реализован и описан в [Player Death And Lobby Return](PLAYER_DEATH_AND_LOBBY_RETURN.md).
 - `MP-01 Replicated Player Presence` реализован и описан в [Replicated Player Presence](REPLICATED_PLAYER_PRESENCE.md).
 
-Следующий task выбрать:
-- `MP-02 Replicated Weapon Presence`, если хотим видеть оружие второго игрока;
-- `Wave-01 Arena Wave Director`, если переходим к нормальному wave spawning.
+Текущий task:
+- `MP-02 Replicated Weapon Presence` - выбран как следующий multiplayer slice.
+
+Следующий task после MP-02:
+- `MP-03 Replicated Combat Events`, если weapon presence работает стабильно;
+- `Wave-01 Arena Wave Director`, если решим временно переключиться на wave spawning.
