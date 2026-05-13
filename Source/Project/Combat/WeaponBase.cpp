@@ -3,6 +3,7 @@
 #include "Combat/WeaponBase.h"
 #include "Combat/HitZoneComponent.h"
 #include "Character/HealthComponent.h"
+#include "CollisionQueryParams.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/Engine.h"
@@ -334,12 +335,23 @@ bool AWeaponBase::FireOnce() {
       const float FinalDamage = Damage * ZoneDamageMultiplier;
 
       bool bAppliedDamage = false;
+      FString DamageRejectReason;
       if (ShouldApplyAuthoritativeDamage() &&
-          ShouldApplyDamageToActor(HitActor)) {
+          ShouldApplyDamageToActor(HitActor, DamageRejectReason)) {
         UGameplayStatics::ApplyPointDamage(
             HitActor, FinalDamage, ShotDirection, HitResult,
             GetOwningController(), this, UDamageType::StaticClass());
         bAppliedDamage = true;
+        UE_LOG(LogProject, Verbose,
+               TEXT("Weapon damage applied. Weapon=%s Instigator=%s Target=%s Damage=%.2f"),
+               *GetNameSafe(this), *GetNameSafe(OwningPawn.Get()),
+               *GetNameSafe(HitActor), FinalDamage);
+      } else if (ShouldApplyAuthoritativeDamage()) {
+        UE_LOG(LogProject, Verbose,
+               TEXT("Weapon damage rejected. Weapon=%s Instigator=%s Target=%s Damage=%.2f Reason=%s"),
+               *GetNameSafe(this), *GetNameSafe(OwningPawn.Get()),
+               *GetNameSafe(HitActor), FinalDamage,
+               DamageRejectReason.IsEmpty() ? TEXT("Unknown") : *DamageRejectReason);
       }
 
       if (bAppliedDamage && bHasHitZoneComponent && GEngine &&
@@ -539,8 +551,10 @@ bool AWeaponBase::ShouldApplyAuthoritativeDamage() const {
   return HasAuthority();
 }
 
-bool AWeaponBase::ShouldApplyDamageToActor(const AActor *HitActor) const {
+bool AWeaponBase::ShouldApplyDamageToActor(const AActor *HitActor,
+                                           FString &OutRejectReason) const {
   if (!HitActor) {
+    OutRejectReason = TEXT("NoHitActor");
     return false;
   }
 
@@ -559,8 +573,17 @@ bool AWeaponBase::ShouldApplyDamageToActor(const AActor *HitActor) const {
 
   const UHealthComponent *TargetHealthComponent =
       HitPawn->FindComponentByClass<UHealthComponent>();
-  return TargetHealthComponent &&
-         TargetHealthComponent->AcceptsFriendlyFireDamage();
+  if (!TargetHealthComponent) {
+    OutRejectReason = TEXT("PlayerTargetHasNoHealthComponent");
+    return false;
+  }
+
+  if (!TargetHealthComponent->AcceptsFriendlyFireDamage()) {
+    OutRejectReason = TEXT("FriendlyFireDisabledOnTarget");
+    return false;
+  }
+
+  return true;
 }
 
 FVector AWeaponBase::GetMuzzleLocation() const {
@@ -625,8 +648,22 @@ bool AWeaponBase::MakeShotTrace(FHitResult &OutHit, FVector &OutTraceStart,
   OutTraceEnd = AimPoint;
 
   const bool bHit = World->LineTraceSingleByChannel(OutHit, OutTraceStart,
-                                                     OutTraceEnd, TraceChannel,
-                                                     QueryParams);
+                                                    OutTraceEnd, TraceChannel,
+                                                    QueryParams);
+
+  FHitResult PawnHit;
+  if (FindPawnTraceHit(World, OutTraceStart, OutTraceEnd, QueryParams,
+                       PawnHit)) {
+    const float ExistingHitDistanceSq =
+        bHit ? FVector::DistSquared(OutTraceStart, OutHit.ImpactPoint)
+             : TNumericLimits<float>::Max();
+    const float PawnHitDistanceSq =
+        FVector::DistSquared(OutTraceStart, PawnHit.ImpactPoint);
+    if (!bHit || PawnHitDistanceSq <= ExistingHitDistanceSq + 1.0f) {
+      OutHit = PawnHit;
+      return true;
+    }
+  }
 
   if (bDrawDebugTrace) {
     const FColor TraceColor = bHit ? FColor::Green : FColor::Red;
@@ -636,4 +673,41 @@ bool AWeaponBase::MakeShotTrace(FHitResult &OutHit, FVector &OutTraceStart,
   }
 
   return bHit;
+}
+
+bool AWeaponBase::FindPawnTraceHit(
+    UWorld *World, const FVector &TraceStart, const FVector &TraceEnd,
+    const FCollisionQueryParams &QueryParams, FHitResult &OutHit) const {
+  if (!World) {
+    return false;
+  }
+
+  FCollisionObjectQueryParams ObjectQueryParams;
+  ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+
+  TArray<FHitResult> PawnHits;
+  if (!World->LineTraceMultiByObjectType(PawnHits, TraceStart, TraceEnd,
+                                         ObjectQueryParams, QueryParams)) {
+    return false;
+  }
+
+  PawnHits.Sort([&TraceStart](const FHitResult &Left, const FHitResult &Right) {
+    return FVector::DistSquared(TraceStart, Left.ImpactPoint) <
+           FVector::DistSquared(TraceStart, Right.ImpactPoint);
+  });
+
+  for (const FHitResult &PawnHit : PawnHits) {
+    AActor *HitActor = PawnHit.GetActor();
+    if (!HitActor || HitActor == GetOwner() || HitActor == OwningPawn.Get()) {
+      continue;
+    }
+
+    if (HitActor->FindComponentByClass<UHealthComponent>() ||
+        Cast<APawn>(HitActor)) {
+      OutHit = PawnHit;
+      return true;
+    }
+  }
+
+  return false;
 }

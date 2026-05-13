@@ -14,6 +14,7 @@
 class APawn;
 class AController;
 class APlayerController;
+struct FCollisionQueryParams;
 class USkeletalMeshComponent;
 class UParticleSystem;
 class USoundBase;
@@ -138,6 +139,9 @@ public:
 
   UFUNCTION(BlueprintPure, Category = "Weapon|Damage")
   float GetDamageMultiplierForZone(EHitZone Zone) const;
+
+  UFUNCTION(BlueprintPure, Category = "Weapon|Damage")
+  bool BypassesFriendlyFireRules() const { return bBypassFriendlyFireRules; }
 
   FOnWeaponFireCosmeticEvent OnWeaponFireCosmeticEvent;
 
@@ -380,7 +384,12 @@ private:
   AController *GetOwningController() const;
   FVector GetMuzzleLocation() const;
   bool ShouldApplyAuthoritativeDamage() const;
-  bool ShouldApplyDamageToActor(const AActor *HitActor) const;
+  bool ShouldApplyDamageToActor(const AActor *HitActor,
+                                FString &OutRejectReason) const;
+  bool FindPawnTraceHit(UWorld *World, const FVector &TraceStart,
+                        const FVector &TraceEnd,
+                        const FCollisionQueryParams &QueryParams,
+                        FHitResult &OutHit) const;
   bool MakeShotTrace(FHitResult &OutHit, FVector &OutTraceStart,
                      FVector &OutTraceEnd,
                      const FVector2D &RecoilOffsetDeg) const;

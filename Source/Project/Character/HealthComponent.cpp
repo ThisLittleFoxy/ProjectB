@@ -5,15 +5,46 @@
 #include "Arena/ArenaGameState.h"
 #include "Arena/ArenaPlayerState.h"
 #include "Character/CurrencyComponent.h"
+#include "Combat/WeaponBase.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Math/UnrealMathUtility.h"
+#include "Net/UnrealNetwork.h"
 #include "Project.h"
+
+namespace {
+bool IsPlayerPawn(const AActor *Actor) {
+  const APawn *Pawn = Cast<APawn>(Actor);
+  return Pawn && Pawn->GetPlayerState();
+}
+
+bool IsPlayerDamageInstigator(const AController *InstigatedBy,
+                              const AActor *DamageCauser) {
+  if (Cast<APlayerController>(InstigatedBy)) {
+    return true;
+  }
+
+  const APawn *CauserInstigator =
+      DamageCauser ? DamageCauser->GetInstigator() : nullptr;
+  return CauserInstigator && CauserInstigator->GetPlayerState();
+}
+
+bool DamageCauserBypassesFriendlyFireRules(const AActor *DamageCauser) {
+  const AWeaponBase *Weapon = Cast<AWeaponBase>(DamageCauser);
+  if (!Weapon && DamageCauser) {
+    Weapon = Cast<AWeaponBase>(DamageCauser->GetOwner());
+  }
+  return Weapon && Weapon->BypassesFriendlyFireRules();
+}
+} // namespace
 
 UHealthComponent::UHealthComponent() {
   PrimaryComponentTick.bCanEverTick = false;
+  SetIsReplicatedByDefault(true);
 }
 
 void UHealthComponent::BeginPlay() {
@@ -37,8 +68,23 @@ void UHealthComponent::BeginPlay() {
   OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, 0.0f);
 }
 
+void UHealthComponent::GetLifetimeReplicatedProps(
+    TArray<FLifetimeProperty> &OutLifetimeProps) const {
+  Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+  DOREPLIFETIME(UHealthComponent, MaxHealth);
+  DOREPLIFETIME(UHealthComponent, CurrentHealth);
+}
+
 float UHealthComponent::ApplyDamage(float DamageAmount) {
   if (DamageAmount <= 0.0f || CurrentHealth <= 0.0f) {
+    return 0.0f;
+  }
+
+  if (const UWorld *World = GetWorld(); World && World->GetNetMode() == NM_Client) {
+    UE_LOG(LogProject, Verbose,
+           TEXT("HealthComponent: rejected client-local damage. Actor=%s Damage=%.2f"),
+           *GetNameSafe(GetOwner()), DamageAmount);
     return 0.0f;
   }
 
@@ -76,6 +122,25 @@ float UHealthComponent::GetHealthPercent() const {
   return CurrentHealth / MaxHealth;
 }
 
+void UHealthComponent::OnRep_CurrentHealth(float PreviousHealth) {
+  const float DeltaHealth = CurrentHealth - PreviousHealth;
+  OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, DeltaHealth);
+
+  const bool bIsOutOfHealth = CurrentHealth <= 0.0f;
+  if (bIsOutOfHealth && !bOutOfHealthNotified) {
+    bOutOfHealthNotified = true;
+    OnOutOfHealth.Broadcast(this);
+  } else if (!bIsOutOfHealth) {
+    bOutOfHealthNotified = false;
+  }
+}
+
+void UHealthComponent::OnRep_MaxHealth(float PreviousMaxHealth) {
+  if (!FMath::IsNearlyEqual(MaxHealth, PreviousMaxHealth)) {
+    OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, 0.0f);
+  }
+}
+
 void UHealthComponent::HandleOwnerTakeAnyDamage(AActor *DamagedActor, float Damage,
                                                 const UDamageType *DamageType,
                                                 AController *InstigatedBy,
@@ -85,6 +150,18 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(AActor *DamagedActor, float Dama
   }
 
   if (!DamagedActor->CanBeDamaged()) {
+    return;
+  }
+
+  const bool bFriendlyPlayerDamage =
+      IsPlayerPawn(DamagedActor) &&
+      IsPlayerDamageInstigator(InstigatedBy, DamageCauser);
+  if (bFriendlyPlayerDamage && !bAcceptFriendlyFireDamage &&
+      !DamageCauserBypassesFriendlyFireRules(DamageCauser)) {
+    UE_LOG(LogProject, Verbose,
+           TEXT("HealthComponent: rejected friendly fire damage. Target=%s Instigator=%s Causer=%s Damage=%.2f"),
+           *GetNameSafe(DamagedActor), *GetNameSafe(InstigatedBy),
+           *GetNameSafe(DamageCauser), Damage);
     return;
   }
 
@@ -200,7 +277,9 @@ bool UHealthComponent::HandleArenaPlayerDeath(AActor *OwnerActor) {
   }
 
   APawn *OwnerPawn = Cast<APawn>(OwnerActor);
-  if (!OwnerPawn || !OwnerPawn->GetPlayerState<AArenaPlayerState>()) {
+  AArenaPlayerState *ArenaPlayerState =
+      OwnerPawn ? OwnerPawn->GetPlayerState<AArenaPlayerState>() : nullptr;
+  if (!OwnerPawn || !ArenaPlayerState) {
     return false;
   }
 
@@ -209,6 +288,11 @@ bool UHealthComponent::HandleArenaPlayerDeath(AActor *OwnerActor) {
   if (AArenaGameMode *ArenaGameMode = World->GetAuthGameMode<AArenaGameMode>()) {
     ArenaGameMode->ReportArenaPlayerDied(OwnerPawn->GetController(),
                                          OwnerActor);
+  }
+
+  if (!ArenaPlayerState->IsArenaAlive()) {
+    SetHealth(MaxHealth);
+    return true;
   }
 
   OwnerActor->SetCanBeDamaged(true);
@@ -223,6 +307,10 @@ float UHealthComponent::SetHealth(float NewHealth) {
   const float DeltaHealth = CurrentHealth - PreviousHealth;
   if (!FMath::IsNearlyZero(DeltaHealth)) {
     OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, DeltaHealth);
+    if (AActor *OwnerActor = GetOwner();
+        OwnerActor && OwnerActor->HasAuthority()) {
+      OwnerActor->ForceNetUpdate();
+    }
   }
 
   const bool bIsOutOfHealth = CurrentHealth <= 0.0f;

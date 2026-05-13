@@ -99,6 +99,9 @@ protected:
   UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
   bool bForceTouchControls = false;
 
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Debug|Replication")
+  bool bLogReplicatedPawnVisualRefresh = false;
+
   UPROPERTY(EditAnywhere, Category = "UI|HUD")
   TSubclassOf<UCrosshairWidgetBase> HUDWidgetClass;
 

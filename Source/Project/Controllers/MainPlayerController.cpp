@@ -562,18 +562,20 @@ void AMainPlayerController::RefreshReplicatedPawnVisuals() const {
       MeshComponent->SetHiddenInGame(false, false);
       MeshComponent->MarkRenderStateDirty();
 
-      UE_LOG(LogProject, Display,
-             TEXT("Refreshed replicated pawn visual. Viewer=%s Pawn=%s LocalPawn=%s Mesh=%s FirstPerson=%s OnlyOwnerSee=%s OwnerNoSee=%s Visible=%s HiddenInGame=%s SkeletalMesh=%s AnimClass=%s"),
-             *GetNameSafe(this), *GetNameSafe(ObservedPawn),
-             bIsLocalPawn ? TEXT("true") : TEXT("false"),
-             *GetNameSafe(MeshComponent),
-             bLooksFirstPerson ? TEXT("true") : TEXT("false"),
-             MeshComponent->bOnlyOwnerSee ? TEXT("true") : TEXT("false"),
-             MeshComponent->bOwnerNoSee ? TEXT("true") : TEXT("false"),
-             MeshComponent->IsVisible() ? TEXT("true") : TEXT("false"),
-             MeshComponent->bHiddenInGame ? TEXT("true") : TEXT("false"),
-             *GetNameSafe(MeshComponent->GetSkeletalMeshAsset()),
-             *GetNameSafe(MeshComponent->GetAnimClass()));
+      if (bLogReplicatedPawnVisualRefresh) {
+        UE_LOG(LogProject, Display,
+               TEXT("Refreshed replicated pawn visual. Viewer=%s Pawn=%s LocalPawn=%s Mesh=%s FirstPerson=%s OnlyOwnerSee=%s OwnerNoSee=%s Visible=%s HiddenInGame=%s SkeletalMesh=%s AnimClass=%s"),
+               *GetNameSafe(this), *GetNameSafe(ObservedPawn),
+               bIsLocalPawn ? TEXT("true") : TEXT("false"),
+               *GetNameSafe(MeshComponent),
+               bLooksFirstPerson ? TEXT("true") : TEXT("false"),
+               MeshComponent->bOnlyOwnerSee ? TEXT("true") : TEXT("false"),
+               MeshComponent->bOwnerNoSee ? TEXT("true") : TEXT("false"),
+               MeshComponent->IsVisible() ? TEXT("true") : TEXT("false"),
+               MeshComponent->bHiddenInGame ? TEXT("true") : TEXT("false"),
+               *GetNameSafe(MeshComponent->GetSkeletalMeshAsset()),
+               *GetNameSafe(MeshComponent->GetAnimClass()));
+      }
     }
   }
 }

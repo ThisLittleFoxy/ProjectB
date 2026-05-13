@@ -55,8 +55,7 @@ Manual listen-server PIE check passed:
    no reload sound asset.
 6. Confirm damage/death behavior is not treated as MP-03 acceptance criteria.
 
-## Follow-Up
+## Follow-Up Closed
 
-Friendly-fire damage did not pass manual testing and belongs to `MP-04 Combat
-Damage Authority`, where server trace, target collision, and player damage rules
-should be handled together.
+Friendly-fire and server-authoritative damage were completed in
+[Combat Damage Authority](COMBAT_DAMAGE_AUTHORITY.md).

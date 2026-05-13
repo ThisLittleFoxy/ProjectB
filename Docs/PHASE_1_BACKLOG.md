@@ -176,3 +176,9 @@
 Следующий task после MP-04:
 - `MP-05 Player Animation/State Polish`, если damage authority работает стабильно;
 - `Wave-01 Arena Wave Director`, если решим временно переключиться на wave spawning.
+ 
+## Multiplayer Foundation Update
+
+- `MP-04 Combat Damage Authority` done and documented in [Combat Damage Authority](COMBAT_DAMAGE_AUTHORITY.md).
+- `MP-05 Player Animation/State Polish` done and documented in [Player Animation State Polish](PLAYER_ANIMATION_STATE_POLISH.md).
+- Next recommended gameplay slice: `Wave-01 Arena Wave Director`.

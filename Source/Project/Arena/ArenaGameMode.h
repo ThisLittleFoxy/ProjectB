@@ -12,6 +12,7 @@ class AArenaGameState;
 class AArenaPlayerState;
 class AActor;
 class AController;
+class UThreatAIComponent;
 
 UCLASS(BlueprintType, Blueprintable)
 class PROJECT_API AArenaGameMode : public AGameModeBase {
@@ -83,6 +84,28 @@ protected:
             meta = (ClampMin = "1"))
   int32 DefaultTotalWaves = 6;
 
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Wave")
+  TSubclassOf<AActor> ThreatClass;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Threat AI")
+  bool bAttachDefaultThreatAIOnSpawn = true;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Threat AI",
+            meta = (EditCondition = "bAttachDefaultThreatAIOnSpawn"))
+  TSubclassOf<UThreatAIComponent> DefaultThreatAIComponentClass;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Wave",
+            meta = (ClampMin = "0"))
+  int32 ThreatsPerWave = 5;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Wave",
+            meta = (ClampMin = "0.0"))
+  float ArenaCountdownDuration = 3.0f;
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Wave",
+            meta = (ClampMin = "0.0"))
+  float ArenaIntermissionDuration = 5.0f;
+
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Ready",
             meta = (ClampMin = "1"))
   int32 MinimumReadyPlayersToStart = 1;
@@ -122,8 +145,19 @@ protected:
             meta = (ClampMin = "0.0", EditCondition = "bOffsetDebugPlayerSpawnsInPIE"))
   float DebugPlayerSpawnSpacing = 240.0f;
 
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Spawns")
+  FName LobbyPlayerSpawnTag = TEXT("LobbyPlayerSpawn");
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Spawns")
+  FName ArenaPlayerSpawnTag = TEXT("ArenaPlayerSpawn");
+
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arena|Spawns")
+  FName ThreatSpawnPointTag = TEXT("ThreatSpawnPoint");
+
 private:
   FTimerHandle DebugPhaseFlowTimerHandle;
+  FTimerHandle ArenaCountdownTimerHandle;
+  FTimerHandle ArenaIntermissionTimerHandle;
   int32 DebugPhaseFlowStep = 0;
   bool bArenaRunInitialized = false;
   bool bDebugCurrencyTestHasRun = false;
@@ -135,13 +169,46 @@ private:
   void ResetPlayerReadyStates() const;
   void ResetPlayerAliveStates() const;
   void ClearPlayerArenaRuntimeRewards(AArenaPlayerState *PlayerState) const;
-  bool ReturnArenaRunToLobbyAfterPlayerDeath(const TCHAR *Reason);
+  void StartNextArenaWaveFromCountdown();
+  void StartNextArenaWaveFromIntermission();
+  void ScheduleArenaIntermissionAdvance(const FArenaRunState &RunState);
+  bool StartArenaCombatWave(int32 WaveNumber, int32 RequestedThreats,
+                            bool bSpawnThreats, const TCHAR *Context);
+  int32 SpawnArenaThreatsForWave(int32 RequestedThreats);
+  void EnsureThreatAIComponent(AActor *ThreatActor) const;
+  bool ResolveThreatSpawnTransform(int32 SpawnIndex,
+                                   FTransform &OutTransform) const;
+  bool HasAliveArenaPlayers() const;
+  void DisableArenaPlayerUntilWaveComplete(AController *PlayerController,
+                                           AActor *PlayerActor) const;
+  bool BeginSpectatingAliveTeammate(AController *PlayerController) const;
+  int32 ReviveDeadArenaPlayersAtCheckpoint();
+  void ClearArenaRuntimeTimers();
+  bool ReturnArenaRunToLobby(const TCHAR *Reason);
   void TryStartArenaRunIfReady();
   void RunDebugCurrencyTestIfNeeded(APlayerController *NewPlayer);
   void SeedDebugPlayerStats(APlayerController *NewPlayer) const;
   void SeedDebugPlayerStatsForExistingPlayers();
   void ApplyDebugPlayerSpawnOffset(AController *NewPlayer) const;
+  void RegisterPlayerRespawnCheckpoint(AController *PlayerController);
+  bool RespawnArenaPlayerAtCheckpoint(AController *PlayerController,
+                                      AActor *PlayerActor) const;
+  void TeleportAllArenaPlayersToTaggedSpawns(FName SpawnTag,
+                                             const TCHAR *Context);
+  bool TeleportArenaPlayerToTaggedSpawn(AController *PlayerController,
+                                        FName SpawnTag,
+                                        const TCHAR *Context);
+  bool ResolveTaggedPlayerSpawnTransform(AController *PlayerController,
+                                         FName SpawnTag,
+                                         FTransform &OutTransform) const;
+  bool TeleportPlayerActor(AController *PlayerController, AActor *PlayerActor,
+                           const FTransform &DestinationTransform,
+                           const TCHAR *Context) const;
+  int32 GetArenaPlayerIndex(AController *PlayerController) const;
   void HandleDebugPhaseFlowStep();
   void LogArenaRunState(const TCHAR *Context,
                         const FArenaRunState &RunState) const;
+
+  TMap<TWeakObjectPtr<AArenaPlayerState>, FTransform>
+      PlayerRespawnCheckpointTransforms;
 };

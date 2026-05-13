@@ -35,6 +35,8 @@ public:
   UHealthComponent();
 
   virtual void BeginPlay() override;
+  virtual void GetLifetimeReplicatedProps(
+      TArray<FLifetimeProperty> &OutLifetimeProps) const override;
 
   UPROPERTY(BlueprintAssignable, Category = "Health|Events")
   FHealthChangedSignature OnHealthChanged;
@@ -72,11 +74,13 @@ public:
   bool AcceptsFriendlyFireDamage() const { return bAcceptFriendlyFireDamage; }
 
 protected:
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health",
+  UPROPERTY(ReplicatedUsing = OnRep_MaxHealth, EditAnywhere, BlueprintReadOnly,
+            Category = "Health",
             meta = (ClampMin = "1.0"))
   float MaxHealth = 100.0f;
 
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health",
+  UPROPERTY(ReplicatedUsing = OnRep_CurrentHealth, EditAnywhere,
+            BlueprintReadOnly, Category = "Health",
             meta = (ClampMin = "0.0"))
   float CurrentHealth = 100.0f;
 
@@ -127,6 +131,12 @@ protected:
   FColor DamageScreenMessageColor = FColor::Red;
 
 private:
+  UFUNCTION()
+  void OnRep_CurrentHealth(float PreviousHealth);
+
+  UFUNCTION()
+  void OnRep_MaxHealth(float PreviousMaxHealth);
+
   UFUNCTION()
   void HandleOwnerTakeAnyDamage(AActor *DamagedActor, float Damage,
                                 const UDamageType *DamageType,
